@@ -69,3 +69,16 @@ Antworten (in PLAN.md eingetragen):
 - Die Integration verhielt sich bei allen drei Punkten schon so.
 - Neu ist, dass nur vorübergehende Fehler in die Queue kommen, 4xx wird verworfen.
 - Backend-Patch `backend/machineswitch.php` mit `end`-Parameter, idempotentem Stop und SQL-Injection-Fix.
+
+## 2026-10-18 – Privates Repository
+> ich möchte mein github repo nicht öffentlich machen > wie kann ich das dann trotzdem installieren?
+
+**Folge:** Das Repo bleibt privat. Die Installation über HACS ist damit nicht vorgesehen, stattdessen per Deploy-Key, `git clone` auf dem HA-Host und Symlink nach `custom_components` (Details in der Antwort bzw. im README, sobald übernommen).
+
+## 2026-10-18 – Secret-Check vor Veröffentlichung
+> kontrolliere ob keine geheimnisse im repo stehen, dann würde ich in betracht ziehen es öffentlich zu machen.
+
+**Ergebnis:**
+- Arbeitsstand und gesamte Git-Historie (3 Commits) durchsucht: keine Keys, Passwörter, Tokens oder Secret-Dateien. Alles läuft über `!secret` bzw. `config.inc.php`.
+- **Vor dem Veröffentlichen:** gepatchte `backend/machineswitch.php` deployen, weil Legacy-Code und Doku die SQL-Injection im Start-Query offenlegen.
+- Weitere Hinweise: Fallback-Key `CHANGEME`, interne IPs in `docs/legacy`, die Commit-E-Mail wird öffentlich.
