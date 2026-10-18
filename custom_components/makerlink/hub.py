@@ -17,7 +17,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.storage import Store
 
@@ -42,9 +45,11 @@ from .const import (
     DEFAULT_PULSE_TIME,
     DEFAULT_SHUTDOWN_TIME,
     DEFAULT_SHUTDOWN_TIME_BY_TYPE,
+    DOMAIN,
     EVENT_READER_TAG,
     EVENT_TAG_SCANNED,
     KIND_DOOR,
+    SIGNAL_UPDATE,
     STORAGE_KEY,
     STORAGE_VERSION,
     SUBENTRY_UNIT,
@@ -118,6 +123,8 @@ class MakerLinkHub:
             entry.data.get(CONF_VERIFY_SSL, True),
         )
         self.units: dict[str, UnitController] = {}
+        self._hardware: dict[str, HassHardware] = {}
+        self._reader_entities: dict[str, list[str]] = {}
         self._readers: dict[str, UnitController] = {}
         self._store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}"
@@ -140,12 +147,15 @@ class MakerLinkHub:
         """Reconcile controllers with current entity states (after platforms are set up)."""
         for unit in self.units.values():
             await unit.async_start()
+        self._signal_update()
 
     async def async_unload(self) -> None:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
         await self._store.async_save(self._data_to_save())
+        self.units.clear()
+        self._signal_update()
 
     # ----- units -------------------------------------------------------------------
 
@@ -182,8 +192,17 @@ class MakerLinkHub:
             )
             unit.restore(stored)
 
-        self.units[subentry.subentry_id] = unit
+        sub_id = subentry.subentry_id
+        self.units[sub_id] = unit
+        self._hardware[sub_id] = hardware
         self._readers[data[CONF_READER_DEVICE]] = unit
+        self._reader_entities[sub_id] = [
+            e.entity_id
+            for e in er.async_entries_for_device(
+                er.async_get(self.hass), data[CONF_READER_DEVICE], include_disabled_entities=False
+            )
+        ]
+        self._unsubs.append(unit.add_listener(self._signal_update))
 
         @callback
         def _power_changed(event: Event[EventStateChangedData]) -> None:
@@ -201,6 +220,82 @@ class MakerLinkHub:
             self._unsubs.append(
                 async_track_state_change_event(self.hass, hardware.interlocks, _interlock_changed)
             )
+        # Panel: power/interlock/reader availability are shown live as well.
+        watched = {hardware.power_entity, *hardware.interlocks, *self._reader_entities[sub_id]}
+        self._unsubs.append(
+            async_track_state_change_event(self.hass, list(watched), self._handle_watched_state)
+        )
+
+    # ----- panel -------------------------------------------------------------------
+
+    @callback
+    def _signal_update(self) -> None:
+        async_dispatcher_send(self.hass, SIGNAL_UPDATE)
+
+    @callback
+    def _handle_watched_state(self, _event: Event[EventStateChangedData]) -> None:
+        self._signal_update()
+
+    def _reader_online(self, sub_id: str) -> bool | None:
+        """True if any entity of the reader device is available (None: no entities)."""
+        entity_ids = self._reader_entities.get(sub_id) or []
+        if not entity_ids:
+            return None
+        return any(
+            (state := self.hass.states.get(e)) is not None and state.state != STATE_UNAVAILABLE
+            for e in entity_ids
+        )
+
+    def unit_snapshot(self, sub_id: str) -> dict[str, Any]:
+        """Everything the sidebar panel shows for one unit."""
+        unit = self.units[sub_id]
+        hardware = self._hardware[sub_id]
+        subentry = self.entry.subentries[sub_id]
+        device = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, sub_id)})
+        interlocks = []
+        for entity_id in hardware.interlocks:
+            state = self.hass.states.get(entity_id)
+            interlocks.append(
+                {
+                    "entity_id": entity_id,
+                    "name": state.name if state else entity_id,
+                    "closed": state is not None and state.state == STATE_OFF,
+                }
+            )
+        snapshot: dict[str, Any] = {
+            "id": sub_id,
+            "entry_id": self.entry.entry_id,
+            "name": unit.name,
+            "kind": unit.kind,
+            "unit_id": unit.unit_id,
+            "status": unit.status,
+            "display": list(unit.display_lines or ("", "")),
+            "out_of_order": unit.out_of_order,
+            "settings": dict(unit.settings),
+            "power": hardware.power_state(),
+            "power_entity": hardware.power_entity,
+            "interlocks": interlocks,
+            "reader_online": self._reader_online(sub_id),
+            "reader_device_id": subentry.data[CONF_READER_DEVICE],
+            "device_id": device.id if device else None,
+        }
+        if isinstance(unit, MachineController):
+            snapshot.update(
+                {
+                    "machine_type": unit.machine_type,
+                    "admin": unit.admin,
+                    "session_active": unit.session_active,
+                    "session_start": unit.session_start,
+                    "user": unit.last_user or None,
+                    "shutdown_remaining": unit.shutdown_counter,
+                    "last_cost": unit.last_cost,
+                    "last_balance": unit.last_balance,
+                    "pending_bookings": len(unit.pending_stops),
+                }
+            )
+        elif isinstance(unit, DoorController):
+            snapshot["last_allowed"] = unit.last_allowed
+        return snapshot
 
     # ----- events ------------------------------------------------------------------
 

@@ -1,0 +1,20 @@
+# Display: LCD 16x2 (HD44780) mit PCF8574-I2C-Backpack
+# Zeigt die zwei Text-Entitäten line1/line2 aus makerlink-reader-base.yaml.
+
+substitutions:
+  display_i2c_address: "0x27"   # manche Backpacks: 0x3F
+
+display:
+  - platform: lcd_pcf8574
+    id: lcd
+    dimensions: 16x2
+    address: ${display_i2c_address}
+    update_interval: 250ms
+    lambda: |-
+      if (!id(api_server).is_connected()) {
+        it.print(0, 0, "-MakerAustria-");
+        it.print(0, 1, "HA offline");
+        return;
+      }
+      it.print(0, 0, id(line1).state.c_str());
+      it.print(0, 1, id(line2).state.c_str());

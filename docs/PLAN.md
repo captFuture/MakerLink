@@ -54,12 +54,14 @@ Derzeit keine.
 | Rolle | HA-Mechanismus | Pflicht |
 |---|---|---|
 | Karten-Scan | Event `esphome.makerlink_tag` (`uid`, `device_id`) **oder** Standard-Event `tag_scanned` mit `device_id`. Die UID kommt roh, die Integration wandelt ins MARS-Format um. | ja |
-| Display Zeile 1/2 | 2× `text`-Entity (16 Zeichen) | nein |
+| Display Zeile 1/2 | 2× `text`-Entity (16 Zeichen). Referenz-Firmware: LCD 16x2 oder OLED 128x32 (SSD1306) | nein |
 | Schaltziel | `switch`-Entity (Reader-Relais **oder** externe Steckdose) | ja |
 | Mikroschalter 1/2 | `binary_sensor` (HA-Konvention: `on` = offen) | nein |
 | Offline-Fähigkeit | ESPHome-Actions `makerlink_sync_cards`, `makerlink_heartbeat`, Event `esphome.makerlink_offline_session` | nein (nur MakerLink-Firmware) |
 
 Die MakerLink-Firmware nutzt `esphome.makerlink_tag` statt `tag_scanned`, damit nicht jede Mitgliedskarte in der Tag-Registry von HA landet.
+
+**PN532 an ESP32 nur über HSU (UART)**, nicht I2C, weil der ESP32 mit dem Clock-Stretching des PN532 nicht zurechtkommt. ESPHome hat keine PN532-UART-Komponente, deshalb nutzt die Referenz-Firmware den bestehenden Treiber `pn532_hsu.h` (Arduino-Framework). Gemeldet wird einmal pro Auflegen der Karte.
 
 UID-Konvertierung: 1:1-Port des Lambdas aus `maker-reader-hw-esp8266.yaml` („F4-96-D2-03“ → `0xf4 0x96 0xd2 0x3`, URL-codiert `0xf4%200x96%200xd2%200x3`, führende Null pro Byte entfernt) in `mars_format.py`, mit Unit-Tests.
 
@@ -79,6 +81,9 @@ custom_components/makerlink/
   entity.py          Basisklasse (Device pro Einheit)
   sensor.py / binary_sensor.py / switch.py / number.py / select.py / button.py
   diagnostics.py
+  ws_api.py          WebSocket-API fürs Panel: makerlink/units, makerlink/subscribe, makerlink/action
+  panel.py           Registriert das Seitenleisten-Panel (für alle Benutzer) und die statischen Dateien
+  frontend/makerlink-panel.js   Panel als Web Component ohne Build-Schritt
   strings.json, translations/{de,en}.json
 esphome/             Referenz-Firmware für dumme Reader
 backend/             Erweiterte machineswitch.php (Deployment siehe backend/README.md)
@@ -104,7 +109,13 @@ Scan → `doorLockCheck` → bei Zutritt Relais-Impuls (`pulse_time`, Standard 3
 ### 3.3 Externe Steckdosen
 Das Schaltziel ist eine beliebige `switch`-Entity (ZHA/Z2M, Shelly, Tasmota …). Ist sie `unavailable`, wird der Start verweigert („Steckdose offline“). Der Offline-Fallback funktioniert nur mit dem Relais am Reader.
 
-### 3.4 Discovery und Onboarding (Phase 1b)
+### 3.4 Seitenleisten-Panel (v0.3.0)
+- **Registrierung:** `async_setup` registriert das Panel einmal pro HA-Start, unabhängig von den Config Entries. Es ist für alle Benutzer sichtbar (`require_admin=False`). Die JS-Datei wird mit `?v=<version>` geladen, damit der Browser nach einem Update die neue Datei holt.
+- **Daten:** Der Hub liefert pro Einheit einen Snapshot (Status, Display, Session, Schaltziel, Sicherheitsschalter, Reader online, offene Buchungen) und sendet das Dispatcher-Signal `makerlink_update` bei jeder Änderung. Das gilt auch für Zustandswechsel der Reader-Entitäten. `makerlink/subscribe` schickt daraufhin den neuen Snapshot.
+- **Aktionen:** `makerlink/action` mit `stop_session`, `open_door`, `out_of_order` und `admin` ist für alle angemeldeten Benutzer erlaubt, genau wie das Schalten der Entitäten.
+- **Später:** Protokoll der letzten Scans und Ablehnungen (Ringpuffer).
+
+### 3.5 Discovery und Onboarding (Phase 1b)
 Die Firmware setzt `esphome: project: name: makeraustria.makerlink_reader`. `discovery.py` erkennt solche Geräte im Device-Registry und startet einen Discovery-Flow, der die Entitäten des Geräts vorbelegt.
 
 ## 4. Offline-Fallback (Phase 1c)
@@ -126,6 +137,7 @@ Die Firmware setzt `esphome: project: name: makeraustria.makerlink_reader`. `dis
   - ESPHome-Referenz-Firmware unter `esphome/`
   - 40 lokale Unit-Tests grün; der Import-Smoke-Test gegen echtes HA läuft in der CI
 - **Backend-Patch** (`backend/machineswitch.php`): `end`-Parameter, idempotenter Stop, SQL-Injection-Fix. Muss noch auf den Server.
+- **v0.3.0:** Seitenleisten-Panel „MakerLink“ mit Live-Übersicht und Aktionen. Außerdem die ESPHome-Firmware mit PN532 über HSU und OLED-Variante.
 - **Noch offen in 1a:** Config-Flow-Tests mit `pytest-homeassistant-custom-component` und ein E2E-Test auf echter Hardware.
 - **Nächste Schritte:** Phase 1b (Discovery), danach 1c (Offline inklusive Backend-Patch).
 

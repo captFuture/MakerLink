@@ -1,0 +1,104 @@
+# Hardware-Adapter: ESP32-S3 Super Mini + PN532 HSU RFID
+# https://www.espboards.dev/esp32/esp32-s3-super-mini/
+# Wird als Package inkludiert zusammen mit maker-reader-logic.yaml
+
+substitutions:
+  p_relay:    GPIO6
+  p_sda:      GPIO8
+  p_scl:      GPIO9
+  p_pn532_rx: "4"    # HSU RX  (ESP RX ← PN532 TX)
+  p_pn532_tx: "5"    # HSU TX  (ESP TX → PN532 RX)
+  p_input1:   GPIO10 # Tür-Schalter 1 (Kiln, für später)
+  p_input2:   GPIO11 # Tür-Schalter 2 (Kiln, für später)
+
+esphome:
+  includes:
+    - hardware/pn532_hsu.h
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+  flash_size: 4MB
+
+psram:
+  mode: quad
+  speed: 80MHz
+
+logger:
+  level: DEBUG
+  hardware_uart: USB_SERIAL_JTAG
+
+i2c:
+  sda: ${p_sda}
+  scl: ${p_scl}
+  scan: true
+  frequency: 50kHz
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: ${p_input1}
+      mode: INPUT_PULLUP
+    id: door_switch_1
+    name: "Door Switch 1"
+    filters:
+      - delayed_on:  50ms
+      - delayed_off: 50ms
+  - platform: gpio
+    pin:
+      number: ${p_input2}
+      mode: INPUT_PULLUP
+    id: door_switch_2
+    name: "Door Switch 2"
+    filters:
+      - delayed_on:  50ms
+      - delayed_off: 50ms
+
+globals:
+  - id: g_pn532_ready
+    type: bool
+    initial_value: 'false'
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          // PN532 einmalig initialisieren (pn532_hsu.h)
+          static PN532_HSU pn532(1, ${p_pn532_rx}, ${p_pn532_tx});
+          if (!id(g_pn532_ready)) {
+            pn532.begin();
+            id(g_pn532_ready) = pn532.ready;
+          }
+
+          if (!id(g_pn532_ready)) return;
+
+          std::string tag = pn532.read_tag();
+          if (tag.empty()) return;
+
+          if (id(g_card_cooldown) > 0) {
+            ESP_LOGI("rfid", "Card ignored - cooldown %ds", id(g_card_cooldown));
+            return;
+          }
+
+          // PN532 liefert "AB-CD-EF" → normalisiert zu "0xab%200xcd%200xef"
+          std::string fmt = "";
+          size_t pos = 0; bool first = true;
+          while (pos < tag.length()) {
+            size_t dash = tag.find('-', pos);
+            std::string seg = (dash == std::string::npos) ? tag.substr(pos) : tag.substr(pos, dash - pos);
+            for (auto& c : seg) c = tolower(c);
+            size_t nz = seg.find_first_not_of('0');
+            if (nz == std::string::npos) seg = "0";
+            else if (nz > 0) seg = seg.substr(nz);
+            if (!first) fmt += "%20";
+            fmt += "0x" + seg;
+            first = false;
+            if (dash == std::string::npos) break;
+            pos = dash + 1;
+          }
+
+          ESP_LOGI("rfid", "Tag PN532='%s' MARS='%s'", tag.c_str(), fmt.c_str());
+          id(last_rfid).publish_state(fmt);
+          id(g_card_cooldown) = 5;
+          id(process_card_scan).execute();

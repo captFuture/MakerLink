@@ -1,10 +1,7 @@
 # MakerLink Reader – gemeinsame Basis ("dummer" Reader)
 # Keine Business-Logik: Karten-UID → HA-Event, Display ← 2 Text-Entitäten.
-# Die Hardware-Datei muss bereitstellen: i2c (Display), Kartenleser mit
-# on_tag → script.execute: {id: card_scanned, uid: x}, optional Relais/Schalter.
-
-substitutions:
-  display_i2c_address: "0x27"
+# Dazu kommen ein Hardware-Paket (i2c, Kartenleser → script card_scanned,
+# optional Relais/Schalter) und ein Display-Paket (common/display-*.yaml).
 
 esphome:
   name: ${devicename}
@@ -12,7 +9,7 @@ esphome:
   project:
     # Wird von der MakerLink-Integration für die Auto-Discovery erkannt.
     name: makeraustria.makerlink_reader
-    version: "0.2.0"
+    version: "0.3.0"
 
 logger:
 
@@ -67,18 +64,3 @@ sensor:
     name: "WLAN Signal"
     update_interval: 60s
     entity_category: diagnostic
-
-display:
-  - platform: lcd_pcf8574
-    id: lcd
-    dimensions: 16x2
-    address: ${display_i2c_address}
-    update_interval: 250ms
-    lambda: |-
-      if (!id(api_server).is_connected()) {
-        it.print(0, 0, "-MakerAustria-");
-        it.print(0, 1, "HA offline");
-        return;
-      }
-      it.print(0, 0, id(line1).state.c_str());
-      it.print(0, 1, id(line2).state.c_str());

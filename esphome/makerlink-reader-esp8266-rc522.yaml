@@ -13,6 +13,7 @@ substitutions:
 
 packages:
   base: !include common/makerlink-reader-base.yaml
+  display: !include common/display-lcd1602.yaml
 
 esp8266:
   board: d1_mini

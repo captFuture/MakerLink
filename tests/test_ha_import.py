@@ -15,9 +15,11 @@ MODULES = [
     "entity",
     "hub",
     "number",
+    "panel",
     "select",
     "sensor",
     "switch",
+    "ws_api",
 ]
 
 
@@ -35,3 +37,10 @@ def test_translations_match_strings():
     for lang in ("en", "de"):
         data = json.loads((base / "translations" / f"{lang}.json").read_text(encoding="utf-8"))
         assert data.keys() == strings.keys()
+
+
+def test_panel_file_exists():
+    from pathlib import Path
+
+    js = Path(__file__).resolve().parents[1] / "custom_components/makerlink/frontend/makerlink-panel.js"
+    assert 'customElements.define("makerlink-panel"' in js.read_text(encoding="utf-8")

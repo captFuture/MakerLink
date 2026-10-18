@@ -1,0 +1,29 @@
+# Display: 0,91" OLED 128x32, SSD1306 über I2C
+# Zeigt die zwei Text-Entitäten line1/line2 aus makerlink-reader-base.yaml.
+# 16 Zeichen pro Zeile wie beim LCD: Roboto Mono 12 px (~7,2 px Zeichenbreite,
+# 16 Zeichen ≈ 115 px), zwei Zeilen à 16 px Höhe inklusive Unterlängen.
+
+substitutions:
+  oled_i2c_address: "0x3C"   # manche Module: 0x3D
+
+font:
+  - file: "gfonts://Roboto Mono"
+    id: font_line
+    size: 12
+    glyphsets:
+      - GF_Latin_Kernel
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    model: "SSD1306 128x32"
+    address: ${oled_i2c_address}
+    update_interval: 500ms
+    lambda: |-
+      if (!id(api_server).is_connected()) {
+        it.print(0, 0, id(font_line), "-MakerAustria-");
+        it.print(0, 16, id(font_line), "HA offline");
+        return;
+      }
+      it.print(0, 0, id(font_line), id(line1).state.c_str());
+      it.print(0, 16, id(font_line), id(line2).state.c_str());

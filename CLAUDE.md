@@ -10,6 +10,7 @@ Home-Assistant-Custom-Integration (HACS) für das MakerAustria-Maschinen- und T�
 
 ## Struktur
 - `custom_components/makerlink/`: Integration. `const.py`, `mars_format.py`, `display.py` und `controller.py` importieren **kein** `homeassistant`, damit sie lokal ohne HA testbar sind. Der HA-Glue liegt in `hub.py`.
+- `custom_components/makerlink/frontend/`: Seitenleisten-Panel (Vanilla-JS-Web-Component, kein Build-Schritt). Daten über `ws_api.py`.
 - `esphome/`: Referenz-Firmware für „dumme“ Reader.
 - `tests/`: pytest. Lokal läuft nur die Kernlogik, weil HA nicht unter Windows läuft.
 

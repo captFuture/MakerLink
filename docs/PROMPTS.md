@@ -15,7 +15,7 @@ Chronologische Aufzeichnung der Anforderungen und Entscheidungen aus den Session
 > - erst planen, dann entwerfen wir gemeinsam.
 > Die relevanten dateien sind im anhang
 
-Anhänge (alle unter [legacy/](legacy/), Vertrag zusätzlich in [API.md](API.md)): `mars-1720-bambulabp1prot.yaml`, `maker-reader-hw-esp8266.yaml`, `maker-reader-logic.yaml`, `machineswitch.php`.
+Anhänge (alle unter [legacy/](legacy/), Vertrag zusätzlich in [API.md](API.md)): `mars-1720-bambulabp1prot.yaml`, `maker-reader-hw-esp8266.yaml`, `maker-reader-logic.yaml`, `machineswitch.php`. Später nachgereicht: `mars-9998-demo32supermini.yaml`, `maker-reader-hw-esp32s3.yaml`, `pn532_hsu.h`.
 
 **Entscheidungen (Rückfragen):**
 | Frage | Antwort |
@@ -82,3 +82,45 @@ Antworten (in PLAN.md eingetragen):
 - Arbeitsstand und gesamte Git-Historie (3 Commits) durchsucht: keine Keys, Passwörter, Tokens oder Secret-Dateien. Alles läuft über `!secret` bzw. `config.inc.php`.
 - **Vor dem Veröffentlichen:** gepatchte `backend/machineswitch.php` deployen, weil Legacy-Code und Doku die SQL-Injection im Start-Query offenlegen.
 - Weitere Hinweise: Fallback-Key `CHANGEME`, interne IPs in `docs/legacy`, die Commit-E-Mail wird öffentlich.
+
+## 2026-10-18 – PN532 über HSU statt I2C
+> der pn532 reader funktioniert NICHT über i2c (das liegt am esp32 und clockstretching) -> deshab war der ursprung per hsu implementiert:
+>   p_pn532_rx: "4"    # HSU RX  (ESP RX ← PN532 TX)
+>   p_pn532_tx: "5"    # HSU TX  (ESP TX → PN532 RX)
+>
+> > das brauchen wir jetzt auch wieder um eine funktion zu gewährleisten
+
+Nachgereicht: `mars-9998-demo32supermini.yaml`, `maker-reader-hw-esp32s3.yaml`, `pn532_hsu.h` (→ [legacy/](legacy/)).
+
+**Umgesetzt:**
+- `esphome/makerlink-reader-esp32s3-pn532.yaml` nutzt jetzt HSU über `pn532_hsu.h` (Arduino) mit der echten Pinbelegung: PN532 4/5, Relais 6, I2C 8/9 mit 50 kHz, Schalter 10/11.
+- Die Karte wird einmal pro Auflegen gemeldet (Verhaltensänderung gegenüber der Legacy-Firmware).
+- Neue Diagnose-Entität „PN532 bereit“.
+- `esphome config` mit ESPHome 2026.9.1 ist für beide Varianten fehlerfrei, und die ESP32-S3-Variante kompiliert ohne Warnungen. Auf Hardware ist sie noch nicht getestet.
+
+## 2026-10-18 – OLED-Variante
+> this reader has an 0,91 Zoll 128x32 IIC I2C SSD1306
+
+Kontext: Der User hat `esphome/makerlink-reader-esp32s3-pn532-oled.yaml` als Kopie angelegt und das Pinout `docs/layouts/esp32s3-supermini.png` beigelegt.
+
+**Umgesetzt:**
+- Die Firmware ist jetzt in Bausteine aufgeteilt: Basis, ESP32-S3-Hardware und Display-Pakete (LCD 16x2 bzw. SSD1306 128x32).
+- Die OLED-Variante zeigt 2×16 Zeichen in Roboto Mono 12 px. I2C läuft dort mit 400 kHz, weil der PN532 nicht am Bus hängt.
+- Alle drei Varianten bestehen `esphome config`, die OLED-Variante kompiliert ohne Warnungen. Auf Hardware ist sie noch nicht getestet.
+
+## 2026-10-18 – Seitenleiste und Reader-Übersicht
+> ich möchte die integration in der seitenleiste anzeigen können und brauche eine übersicht der konfigurierten reader mit status usw. funktioniert das mit einer integration oder müsste man da eine APP daraus machen? wie kann ich vorgehen?
+
+**Antwort/Empfehlung:** Keine App (früher Add-on) nötig. Die Integration registriert selbst ein Seitenleisten-Panel (Custom Panel, eigene JS-Datei in der Integration) und liefert die Daten über eine eigene WebSocket-API.
+
+## 2026-10-18 – Panel umsetzen
+> der eintrag soll für alle sichtbar sein, setze um wie vorgeschlagen :)
+> erhöhe die versionsnummer, damit Nach dem repo-push ein update im test-ha gemacht werden kann
+
+**Umgesetzt (v0.3.0):**
+- Seitenleisten-Panel „MakerLink“ für alle Benutzer.
+- WebSocket-API (`makerlink/units`, `makerlink/subscribe`, `makerlink/action`).
+- Kachel pro Einheit mit Status, Display-Vorschau, Session, Laufzeit, Schaltziel, Sicherheitsschaltern, Reader online und offenen Buchungen.
+- Aktionen: Session beenden, Nachlauf beenden, Admin-Modus, Außer Betrieb, Tür öffnen, Link zur Geräteseite.
+- Version 0.2.0 → 0.3.0 in `manifest.json` und im ESPHome-Projekt.
+- Geprüft: Das Panel wurde mit Fake-Daten in Chrome headless gerendert (hell, dunkel, schmal). Escaping und Layout stimmen. Ein Test im echten HA steht noch aus.

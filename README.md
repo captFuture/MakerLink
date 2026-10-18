@@ -25,6 +25,13 @@ Architektur und Entscheidungen: [docs/PLAN.md](docs/PLAN.md) · Backend-API: [do
 
 Voraussetzung ist Home Assistant 2025.4 oder neuer.
 
+## Übersicht in der Seitenleiste
+Nach der Installation erscheint **MakerLink** in der Seitenleiste, sichtbar für alle Benutzer. Die Seite zeigt alle Maschinen und Türen live:
+- Status, Displayinhalt, Benutzer und Laufzeit der Session, Nachlauf, letzte Kosten und Guthaben
+- Zustand von Schaltziel, Sicherheitsschaltern und Reader (online/offline), offene Buchungen
+
+Aktionen dort: Session beenden, Nachlauf beenden, Admin-Modus, Außer Betrieb, Tür öffnen, Link zur Geräteseite.
+
 ## Entitäten pro Einheit
 | Entität | Maschine | Tür |
 |---|---|---|

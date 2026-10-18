@@ -49,6 +49,14 @@ EVENT_SESSION_STOPPED = f"{DOMAIN}_session_stopped"
 EVENT_CARD_REJECTED = f"{DOMAIN}_card_rejected"
 EVENT_DOOR_ACCESS = f"{DOMAIN}_door_access"
 
+# Dispatcher signal: any unit changed (panel live updates)
+SIGNAL_UPDATE = f"{DOMAIN}_update"
+
+# Sidebar panel
+PANEL_URL_PATH = DOMAIN
+PANEL_STATIC_URL = f"/{DOMAIN}_static"
+PANEL_WEBCOMPONENT = "makerlink-panel"
+
 STORAGE_VERSION = 1
 STORAGE_KEY = DOMAIN
 

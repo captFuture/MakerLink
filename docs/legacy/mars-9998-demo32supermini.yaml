@@ -1,0 +1,15 @@
+substitutions:
+  devicename: "maker9998"
+  friendly_name: "Reader_Demo_Esp32S3Supermini"
+  device_initial_id: "9998"
+  static_ip: "192.168.20.146"
+  gateway_ip: "192.168.20.1"
+  machine_type: "machine"
+  mars_api_key: !secret mars_api_key
+  crm_api_base_url: !secret crm_api_base_url
+  #display_i2c_address: "0x3F" (default is 0x27)
+
+
+packages:
+  hw:    !include hardware/maker-reader-hw-esp32s3.yaml
+  logic: !include logic/maker-reader-logic.yaml
