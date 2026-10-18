@@ -56,3 +56,16 @@ Getroffene Annahmen stehen in [PLAN.md](PLAN.md) unter „Offene Fragen“.
 > versuche das nocheinmal
 
 **Folge:** Alle vier Anhänge liegen jetzt unverändert in `docs/legacy/` (die frühere Ablehnung war nicht als „nicht ins Repo“ gemeint).
+
+## 2026-10-18 – Offene Fragen beantwortet
+> lies die plan.md nochmal mit der beantwortung der offenen fragen und implementiere entsprechend
+
+Antworten (in PLAN.md eingetragen):
+- **Interlock im Betrieb:** Strom sofort aus (ohne Nachlauf), Session wird gestoppt und abgerechnet.
+- **HA-Neustart:** Ist das Schaltziel noch an, läuft die Session weiter. Ist es aus, wird sie gestoppt.
+- **Stop ohne Server:** „Ja, das machen wir so“ (Queue und `end=<unix>`).
+
+**Umgesetzt:**
+- Die Integration verhielt sich bei allen drei Punkten schon so.
+- Neu ist, dass nur vorübergehende Fehler in die Queue kommen, 4xx wird verworfen.
+- Backend-Patch `backend/machineswitch.php` mit `end`-Parameter, idempotentem Stop und SQL-Injection-Fix.

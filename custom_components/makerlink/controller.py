@@ -443,14 +443,19 @@ class MachineController(UnitController):
         self.busy = "Stop..."
         await self._refresh()
         res: MarsResult | None
+        queued = False
         try:
             res = await self.api.stop(key, self.unit_id, self.machine_type)
         except MarsError as err:
-            _LOGGER.warning("%s: stop of session %s failed, queued: %s", self.name, key, err)
-            self.pending_stops.append(
-                {"key": key, "unit_id": self.unit_id, "type": self.machine_type, "end": end}
-            )
             res = None
+            if err.permanent:
+                _LOGGER.error("%s: stop of session %s rejected: %s", self.name, key, err)
+            else:
+                _LOGGER.warning("%s: stop of session %s failed, queued: %s", self.name, key, err)
+                self.pending_stops.append(
+                    {"key": key, "unit_id": self.unit_id, "type": self.machine_type, "end": end}
+                )
+                queued = True
         else:
             if not res.ok:
                 _LOGGER.warning("%s: backend refused stop of %s: %s", self.name, key, res.msg)
@@ -464,8 +469,10 @@ class MachineController(UnitController):
         self.last_balance = res.balance if res else None
         self.stop_title = "Schaltet aus"
         self.stop_screen = STOP_SCREEN_TIME
-        if res is None:
+        if queued:
             self._show_message("Server offline", "Wird nachgebucht")
+        elif res is None:
+            self._show_message("FEHLER", "Stop abgelehnt")
 
         shutdown = int(self.settings["shutdown_time"])
         if immediate or shutdown <= 0:
@@ -498,8 +505,11 @@ class MachineController(UnitController):
         for item in self.pending_stops:
             try:
                 res = await self.api.stop(item["key"], item["unit_id"], item["type"], item["end"])
-            except MarsError:
-                remaining.append(item)
+            except MarsError as err:
+                if err.permanent:
+                    _LOGGER.error("%s: queued stop %s dropped: %s", self.name, item["key"], err)
+                else:
+                    remaining.append(item)
                 continue
             _LOGGER.info("%s: queued stop %s booked: %s", self.name, item["key"], res.msg)
         if len(remaining) != len(self.pending_stops):

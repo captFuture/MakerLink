@@ -16,6 +16,7 @@ from custom_components.makerlink.controller import (
 from custom_components.makerlink.mars_format import (
     DoorResult,
     MarsConnectionError,
+    MarsHttpError,
     MarsResult,
 )
 
@@ -30,6 +31,7 @@ class FakeApi:
         self.stop_result = MarsResult(ok=True, msg="Gestoppt", cost=-2.5, balance=10.0)
         self.door_result = DoorResult(allowed=True, reason="Super User")
         self.fail = False
+        self.stop_error = None
 
     async def start(self, rfid, unit_id, machine_type, min_balance):
         self.calls.append(("start", rfid, unit_id, machine_type, min_balance))
@@ -41,6 +43,8 @@ class FakeApi:
         self.calls.append(("stop", key, unit_id, machine_type, end))
         if self.fail:
             raise MarsConnectionError("down")
+        if self.stop_error:
+            raise self.stop_error
         return self.stop_result
 
     async def door_check(self, rfid):
@@ -274,3 +278,44 @@ async def test_door(allowed):
     assert ("log_door", RFID, allowed, 1) in api.calls
     assert hw.switches == ([True, False] if allowed else [])
     assert hw.power is False
+
+
+async def test_permanent_stop_error_is_not_queued():
+    ctrl, api, hw, events = make_machine()
+    await ctrl.async_start()
+    await ctrl.on_card(CARD)
+    api.stop_error = MarsHttpError(400, "Parameter key fehlt")
+    await ticks(ctrl, 5)
+    await ctrl.on_card(CARD)
+    assert hw.power is False and ctrl.pending_stops == []
+    assert hw.lines == ("FEHLER", "Stop abgelehnt")
+
+
+async def test_server_error_is_queued_and_retried_with_end():
+    ctrl, api, hw, events = make_machine()
+    await ctrl.async_start()
+    await ctrl.on_card(CARD)
+    api.stop_error = MarsHttpError(500, "DB Fehler")
+    await ticks(ctrl, 5)
+    await ctrl.on_card(CARD)
+    assert len(ctrl.pending_stops) == 1
+    api.stop_error = None
+    await ticks(ctrl, 60)
+    assert ctrl.pending_stops == []
+    assert api.calls[-1] == ("stop", 42, 1720, "3dprint", 1000)
+
+
+async def test_queued_stop_dropped_on_permanent_error():
+    ctrl, api, hw, events = make_machine()
+    ctrl.pending_stops = [{"key": 9, "unit_id": 1720, "type": "3dprint", "end": 900}]
+    api.stop_error = MarsHttpError(400, "bad")
+    await ctrl.retry_pending()
+    assert ctrl.pending_stops == []
+
+
+async def test_queued_stop_already_booked_counts_as_done():
+    ctrl, api, hw, events = make_machine()
+    ctrl.pending_stops = [{"key": 9, "unit_id": 1720, "type": "3dprint", "end": 900}]
+    api.stop_result = MarsResult(ok=True, msg="Bereits gestoppt")
+    await ctrl.retry_pending()
+    assert ctrl.pending_stops == []

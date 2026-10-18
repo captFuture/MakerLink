@@ -18,13 +18,15 @@ Prüft User, Guthaben und Schulung (`schulung.reader_id = unitid`) und legt eine
 Sonderfall `unitid=6` (Kaffeemaschine): bucht sofort 0,50 EUR ab, liefert `key:null`, `cost` und `balance`. Ein Stop ist nicht nötig.
 
 ### `action=stop`
-Parameter: `key`, `unitid`, `type`
+Parameter: `key`, `unitid`, `type`, optional `end` (Unix-Zeit, ab [backend/machineswitch.php](../backend/machineswitch.php))
 
 Schließt die `machine_time`-Zeile und rechnet je nach `type` ab: laser pro angefangener Viertelstunde, 3dprint und dtf pro Minute, kiln fix 40 EUR, machine kostenlos.
 ```json
 {"ok":true, "key":null, "name":null, "msg":"Gestoppt", "cost":-2.5, "balance":12.3, "duration_s":900, "use_units":1}
 {"ok":false, "key":null, "name":null, "msg":"Session nicht gefunden (key=.. unitid=..)"}
+{"ok":true,  "key":null, "name":null, "msg":"Bereits gestoppt", "already_stopped":true}
 ```
+Ab dem Patch ist der Stop idempotent: Eine bereits geschlossene und bezahlte Session wird nicht nochmal abgerechnet. Mit `end` wird bis zu diesem Zeitpunkt abgerechnet (Werte in der Zukunft werden ignoriert).
 
 ### `action=doorLockCheck`
 Parameter: `rfid`
@@ -39,11 +41,11 @@ Wird ca. 2 s nach der Relaisaktion aufgerufen.
 ### Ohne/ungültige `action`
 Liefert `400`, aber erst **nach** Auth und DB-Verbindung. Die Integration nutzt das als Verbindungstest: 400 bedeutet ok, 401 einen falschen Key, 500 einen DB-Fehler.
 
-## Geplante Erweiterungen
+## Erweiterungen
 
 | Erweiterung | Zweck |
 |---|---|
-| `action=stop&end=<unix>` (optional) | Nachgeholter Stop nach einem Server-Ausfall rechnet mit der echten Endzeit ab statt mit `time()`. |
+| ✅ `action=stop&end=<unix>` + Idempotenz | Umgesetzt in `backend/machineswitch.php` |
 | `action=trainedCards&unitid=X` | `{"ok":true,"cards":["<16 hex>",...],"version":"<etag>"}` mit `sha256(salt + rfid)`, gekürzt auf 8 Byte. Für den Offline-Fallback. |
 | `action=offlineSession&rfid&unitid&type&start&end&offline_id` | Nachverrechnung einer Offline-Nutzung, idempotent über `offline_id`. |
-| Fix | Im `start`-Query `$rfid` mit `mysqli_real_escape_string` maskieren (SQL-Injection). |
+| ✅ Fix SQL-Injection im `start`-Query | Umgesetzt in `backend/machineswitch.php` |

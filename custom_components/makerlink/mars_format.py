@@ -15,6 +15,8 @@ class MarsError(Exception):
     """Talking to the MARS backend failed."""
 
     display = "Server Fehler"
+    # Permanent errors (bad request) must not be retried.
+    permanent = False
 
 
 class MarsConnectionError(MarsError):
@@ -36,6 +38,7 @@ class MarsHttpError(MarsError):
         super().__init__(f"HTTP {status}: {msg}")
         self.status = status
         self.display = f"HTTP ERR {status}"
+        self.permanent = 400 <= status < 500
 
 
 def uid_to_mars(raw: str) -> str | None:
