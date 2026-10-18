@@ -1,0 +1,457 @@
+# Business-Logik: MakerAustria RFID-Reader
+# Einzige Datei für alle Geräte-Plattformen.
+# Hardware-spezifisches (MCU, RFID-Reader, GPIO) liegt in den Hardware-Adapter-YAMLs:
+#   - maker-reader-hw-esp8266.yaml  (ESP8266 D1 Mini + RC522)
+#   - maker-reader-hw-esp32s3.yaml  (ESP32-S3 Super Mini + PN532)
+
+#todo: reboot should end machine usage (laser, dtf, kiln)
+#todo: implement door
+#dynamic ip? does this make sense?
+
+substitutions:
+  devicename:          "maker_generic"
+  friendly_name:       "Maker Generic Reader"
+  crm_api_base_url:    "http://localhost/"  # override in device yaml mit !secret
+  machine_type:        "machine"            # machine|laser|3dprint|dtf|kiln
+  mars_api_key:        "changeme"           # override in device yaml mit !secret
+  device_initial_id:   "0"
+  static_ip:           "192.168.20.100"
+  gateway_ip:          "192.168.20.1"
+  display_i2c_address: "0x27"
+
+esphome:
+  name: ${devicename}
+  friendly_name: ${friendly_name}
+
+wifi:
+  networks:
+    - ssid: !secret wifi_ssid1
+      password: !secret wifi_password1
+  manual_ip:
+    static_ip: ${static_ip}
+    gateway:   ${gateway_ip}
+    subnet:    255.255.255.0
+    dns1:      8.8.8.8
+    dns2:      1.1.1.1
+  ap:
+    ssid: "${devicename}-hotspot"
+  on_connect:
+    - logger.log:
+        level: INFO
+        format: "WiFi connected: IP=%s SSID=%s RSSI=%d"
+        args: [ 'id(wifi_ip).state.c_str()', 'id(wifi_ssid).state.c_str()', '(int)id(wifi_signal_sensor).state' ]
+  on_disconnect:
+    - logger.log:
+        level: WARN
+        format: "WiFi disconnected!"
+  min_auth_mode: WPA2
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+web_server:
+  port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
+
+ota:
+  platform: esphome
+
+http_request:
+  useragent: esphome/mars-node
+  timeout:   5s
+  verify_ssl: false
+
+globals:
+  - id: g_current_db_key
+    type: std::string
+    initial_value: '""'
+    restore_value: true
+  - id: g_user_name
+    type: std::string
+    initial_value: '""'
+  - id: g_session_active
+    type: bool
+    initial_value: 'false'
+  - id: g_shutdown_counter
+    type: int
+    initial_value: '0'
+  - id: g_last_http_code
+    type: int
+    initial_value: '0'
+  - id: g_card_cooldown
+    type: int
+    initial_value: '0'
+  - id: g_last_balance
+    type: std::string
+    initial_value: '""'
+  - id: g_show_stop_screen
+    type: int
+    initial_value: '0'
+  - id: g_ha_shutdown_pending
+    type: bool
+    initial_value: 'false'
+  - id: g_admin_mode
+    type: bool
+    initial_value: 'false'
+
+number:
+  - platform: template
+    name: "Reader Unit ID"
+    id: config_unit_id
+    optimistic: true
+    min_value: 0
+    max_value: 9999
+    step: 1
+    initial_value: ${device_initial_id}
+    restore_value: true
+    mode: box
+  - platform: template
+    name: "Min Balance"
+    id: config_min_balance
+    optimistic: true
+    min_value: -100
+    max_value: 1000
+    step: 0.5
+    initial_value: 5.0
+    restore_value: true
+    unit_of_measurement: "EUR"
+  - platform: template
+    name: "Shutdown Time"
+    id: config_shutdown_time
+    optimistic: true
+    min_value: 0
+    max_value: 360
+    step: 1
+    initial_value: 60
+    restore_value: true
+    unit_of_measurement: "s"
+
+select:
+  - platform: template
+    name: "Machine Type"
+    id: config_machine_type
+    optimistic: true
+    restore_value: true
+    initial_option: "${machine_type}"
+    options:
+      - "machine"
+      - "laser"
+      - "3dprint"
+      - "dtf"
+      - "kiln"
+
+switch:
+  - platform: template
+    name: "Out of Order"
+    id: switch_ooo
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+  - platform: gpio
+    pin: ${p_relay}
+    id: relay_hw
+    name: "Power Relay"
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - logger.log:
+          level: INFO
+          format: "RELAY ON"
+      - if:
+          # Wenn keine aktive Session → Admin-Mode (manuelles Umschalten via HA)
+          condition:
+            lambda: 'return id(g_current_db_key).empty();'
+          then:
+            - lambda: 'id(g_admin_mode) = true;'
+            - logger.log: { level: INFO, format: "Admin Mode aktiviert" }
+    on_turn_off:
+      - logger.log:
+          level: INFO
+          format: "RELAY OFF (admin=%d, countdown=%d, session=%d)"
+          args: [ '(int)id(g_admin_mode)', 'id(g_shutdown_counter)', '(int)id(g_session_active)' ]
+      - if:
+          # Admin-Mode: Einfach ausschalten, kein Countdown
+          condition:
+            lambda: 'return id(g_admin_mode);'
+          then:
+            - logger.log: { level: INFO, format: "Admin Mode beendet" }
+            - lambda: 'id(g_admin_mode) = false;'
+            - script.stop: process_card_scan
+      - if:
+          # Countdown läuft bereits → Relay bleibt aus, Interval macht den Rest
+          condition:
+            lambda: 'return id(g_shutdown_counter) > 0;'
+          then:
+            - logger.log: { level: DEBUG, format: "Countdown läuft, Relay bleibt aus" }
+      - if:
+          # Session aktiv & kein Countdown → Stop-Sequenz (API-Call + Countdown)
+          condition:
+            lambda: >-
+              return id(g_session_active)
+                  && id(g_shutdown_counter) == 0;
+          then:
+            - logger.log:
+                level: INFO
+                format: "HA/Ext.: starte Stop-Sequenz mit %d s Countdown"
+                args: [ '(int)id(config_shutdown_time).state' ]
+            - switch.turn_on: relay_hw
+            - script.execute: sequence_stop
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    id: wifi_signal_sensor
+    update_interval: 60s
+
+text_sensor:
+  - platform: template
+    name: "Last Scanned RFID"
+    id: last_rfid
+  - platform: template
+    name: "Status Message"
+    id: status_message
+  - platform: wifi_info
+    ip_address:
+      id: wifi_ip
+      name: "IP Address"
+    ssid:
+      id: wifi_ssid
+      name: "WiFi SSID"
+
+display:
+  - platform: lcd_pcf8574
+    id: lcd_display
+    dimensions: 16x2
+    address: ${display_i2c_address}
+    update_interval: 500ms
+    lambda: |-
+      it.clear();
+      bool wifi_ok = id(wifi_signal_sensor).has_state();
+      float rssi = wifi_ok ? id(wifi_signal_sensor).state : -100.0f;
+      char wifi_char = !wifi_ok ? 'x' : (rssi > -70.0f ? 'W' : 'w');
+
+      if (id(switch_ooo).state) {
+        it.print(0, 0, "AUSSER BETR.  ");
+        it.print(0, 1, "!! WARTUNG !!   ");
+        it.printf(12, 0, "%c%c%c%c", wifi_char, id(relay_hw).state ? 'R' : 'r', '.', 'O');
+        return;
+      }
+      if (id(g_admin_mode)) {
+        it.print(0, 0, "ADMIN MODE:  ");
+        it.print(0, 1, "MakerAdmin      ");
+        it.printf(12, 0, "%c%c%c%c", wifi_char, id(relay_hw).state ? 'R' : 'r', '.', '.');
+        return;
+      }
+      if (id(g_last_http_code) != 0 && id(g_last_http_code) != 200) {
+        it.printf(0, 0, "HTTP ERR %4d", id(g_last_http_code));
+        it.print(0, 1, "                ");
+        it.printf(12, 0, "%c%c%c%c", wifi_char, id(relay_hw).state ? 'R' : 'r', '.', '.');
+        return;
+      }
+      if (id(status_message).state != "") {
+        it.print(0, 0, "WARTEN...   ");
+        it.printf(0, 1, "%-16s", id(status_message).state.substr(0, 16).c_str());
+        it.printf(12, 0, "%c%c%c%c", wifi_char, id(relay_hw).state ? 'R' : 'r', 'S', '.');
+        return;
+      }
+      if (id(g_shutdown_counter) > 0) {
+        it.print(0, 0, "STOPPT:     ");
+        it.printf(0, 1, "%-10s%3ds", id(g_user_name).substr(0, 10).c_str(), id(g_shutdown_counter));
+        it.printf(12, 0, "%c%c%c%c", wifi_char, id(relay_hw).state ? 'R' : 'r', '.', '.');
+        return;
+      }
+      if (id(g_session_active)) {
+        it.print(0, 0, "EIN:        ");
+        it.printf(0, 1, "%-16s", id(g_user_name).substr(0, 16).c_str());
+        it.printf(12, 0, "%c%c%c%c", wifi_char, 'R', 'S', '.');
+        return;
+      }
+      if (id(g_show_stop_screen) > 0) {
+        it.print(0, 0, "Schaltet aus");
+        if (!id(g_last_balance).empty()) {
+          char bal_buf[17];
+          snprintf(bal_buf, sizeof(bal_buf), "Gut: %s EUR", id(g_last_balance).substr(0, 8).c_str());
+          it.print(0, 1, bal_buf);
+        } else {
+          it.print(0, 1, "                ");
+        }
+        it.printf(12, 0, "%c%c%c%c", wifi_char, 'r', '.', '.');
+        return;
+      }
+      // Idle
+      it.print(0, 0, "-MakerAustria-");
+      it.print(0, 1, "Karte Bitte     ");
+      it.printf(14, 0, "%c%c", wifi_char, '.');
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (id(g_shutdown_counter) > 0) {
+            id(g_shutdown_counter)--;
+            if (id(g_shutdown_counter) == 0) {
+              ESP_LOGI("mars", "Countdown done -> Relay OFF");
+              id(relay_hw).turn_off();
+            }
+          }
+          if (id(g_card_cooldown) > 0) id(g_card_cooldown)--;
+          if (id(g_show_stop_screen) > 0) id(g_show_stop_screen)--;
+
+script:
+  - id: error_reset_sequence
+    mode: restart
+    then:
+      - delay: 3s
+      - lambda: 'id(g_last_http_code) = 0;'
+      - text_sensor.template.publish: { id: status_message, state: "" }
+
+  - id: cleanup_stuck_session
+    mode: queued
+    then:
+      - logger.log:
+          level: WARN
+          format: "cleanup_stuck_session: key='%s' unit=%d type='%s'"
+          args: [ 'id(g_current_db_key).c_str()', '(int)id(config_unit_id).state', 'id(config_machine_type).current_option().c_str()' ]
+      - text_sensor.template.publish: { id: status_message, state: "Sync Database..." }
+      - http_request.get:
+          url: !lambda |-
+            std::string url = std::string("${crm_api_base_url}")
+              + "action=stop"
+              + "&type=" + id(config_machine_type).current_option()
+              + "&unitid=" + to_string((int)id(config_unit_id).state)
+              + "&key=" + id(g_current_db_key);
+            ESP_LOGI("http", "cleanup URL: %s", url.c_str());
+            return url;
+          request_headers:
+            X-MARS-Key: "${mars_api_key}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  id(g_last_http_code) = response->status_code;
+                  ESP_LOGI("http", "cleanup: code=%d body='%s'", response->status_code, body.c_str());
+      - lambda: 'id(g_current_db_key) = "";'
+      - text_sensor.template.publish: { id: status_message, state: "" }
+
+  - id: process_card_scan
+    mode: restart
+    then:
+      - if:
+          condition: { switch.is_on: switch_ooo }
+          then:
+            - logger.log: { level: WARN, format: "Card scanned but OOO - ignoring" }
+            - text_sensor.template.publish: { id: status_message, state: "Ausser Betrieb" }
+            - script.execute: error_reset_sequence
+            - script.stop: process_card_scan
+      - lambda: 'id(g_admin_mode) = false;'
+      - if:
+          condition: { lambda: 'return id(g_session_active);' }
+          then:
+            - logger.log:
+                level: INFO
+                format: "Card scanned: stopping session for '%s'"
+                args: [ 'id(g_user_name).c_str()' ]
+            - lambda: |-
+                id(g_shutdown_counter) = 0;
+            - script.execute: sequence_stop
+          else:
+            - logger.log:
+                level: INFO
+                format: "Card scanned: RFID='%s' -> start"
+                args: [ 'id(last_rfid).state.c_str()' ]
+            - script.execute: sequence_start
+
+  - id: sequence_start
+    mode: restart
+    then:
+      - text_sensor.template.publish: { id: status_message, state: "Pruefe..." }
+      - http_request.get:
+          url: !lambda |-
+            // last_rfid ist von beiden HW-Adaptern bereits URL-encoded ("0xf4%200x96...")
+            std::string url = std::string("${crm_api_base_url}")
+              + "action=start"
+              + "&rfid=" + id(last_rfid).state
+              + "&unitid=" + to_string((int)id(config_unit_id).state)
+              + "&type=" + id(config_machine_type).current_option()
+              + "&min_balance=" + to_string((int)id(config_min_balance).state);
+            ESP_LOGI("http", "start URL: %s", url.c_str());
+            return url;
+          request_headers:
+            X-MARS-Key: "${mars_api_key}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  id(g_last_http_code) = response->status_code;
+                  ESP_LOGI("http", "start: code=%d body='%s'", response->status_code, body.c_str());
+                  bool ok = strstr(body.c_str(), "ok\":true") != nullptr;
+                  std::string name = "";
+                  const char* np = strstr(body.c_str(), "name\":\"");
+                  if (np) { np += 7; const char* ne = strchr(np, '"'); if (ne) name = std::string(np, ne - np); }
+                  std::string dbkey = "";
+                  const char* kp = strstr(body.c_str(), "key\":");
+                  if (kp) { kp += 5; while (*kp == ' ') kp++; const char* ke = strpbrk(kp, ",}"); if (ke) dbkey = std::string(kp, ke - kp); }
+                  std::string msg = "";
+                  const char* mp = strstr(body.c_str(), "msg\":\"");
+                  if (mp) { mp += 6; const char* me = strchr(mp, '"'); if (me) msg = std::string(mp, me - mp); }
+                  ESP_LOGI("http", "start: ok=%d name='%s' key='%s' msg='%s'", ok, name.c_str(), dbkey.c_str(), msg.c_str());
+                  if (ok && !dbkey.empty() && dbkey != "null") {
+                    id(g_current_db_key) = dbkey;
+                    id(g_user_name) = name;
+                    id(relay_hw).turn_on();
+                    id(g_session_active) = true;
+                    id(g_last_http_code) = 0;
+                    id(status_message).publish_state("");
+                    id(g_shutdown_counter) = 0;
+                  } else {
+                    id(status_message).publish_state(msg.substr(0, 16));
+                    id(error_reset_sequence).execute();
+                  }
+
+  - id: sequence_stop
+    mode: restart
+    then:
+      - text_sensor.template.publish: { id: status_message, state: "Stop..." }
+      - http_request.get:
+          url: !lambda |-
+            std::string url = std::string("${crm_api_base_url}")
+              + "action=stop"
+              + "&type=" + id(config_machine_type).current_option()
+              + "&unitid=" + to_string((int)id(config_unit_id).state)
+              + "&key=" + id(g_current_db_key);
+            ESP_LOGI("http", "stop URL: %s", url.c_str());
+            return url;
+          request_headers:
+            X-MARS-Key: "${mars_api_key}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  id(g_last_http_code) = response->status_code;
+                  ESP_LOGI("http", "stop: code=%d body='%s'", response->status_code, body.c_str());
+                  const char* cp = strstr(body.c_str(), "cost\":");
+                  if (cp) {
+                    cp += 6; while (*cp == ' ') cp++;
+                    const char* ce = strpbrk(cp, ",}");
+                    std::string cost = ce ? std::string(cp, ce - cp) : "";
+                    const char* bp2 = strstr(body.c_str(), "balance\":");
+                    std::string bal = "";
+                    if (bp2) { bp2 += 9; while (*bp2 == ' ') bp2++; const char* be = strpbrk(bp2, ",}"); if (be) bal = std::string(bp2, be - bp2); }
+                    ESP_LOGI("http", "stop: cost=%s balance=%s", cost.c_str(), bal.c_str());
+                    id(g_last_balance) = bal;
+                  } else {
+                    id(g_last_balance) = "";
+                  }
+      - lambda: |-
+          id(g_current_db_key) = "";
+          id(g_session_active) = false;
+          id(g_last_http_code) = 0;
+          id(g_admin_mode) = false;
+          id(g_show_stop_screen) = 5;
+          id(status_message).publish_state("");
+          // Countdown starten (Relay bleibt an zur Abkühlphase)
+          id(g_shutdown_counter) = (int)id(config_shutdown_time).state;
+          if (id(g_shutdown_counter) == 0) {
+            id(relay_hw).turn_off();  // nur wenn config_shutdown_time = 0
+          }

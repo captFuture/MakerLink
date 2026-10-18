@@ -2,10 +2,184 @@
   "config": {
     "step": {
       "user": {
-        "title": "MakerLink",
-        "data": { "host": "Host" }
+        "title": "MARS backend",
+        "description": "Connection to the MakerAustria access server (machineswitch.php).",
+        "data": {
+          "api_url": "API URL",
+          "api_key": "API key (X-MARS-Key)",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "api_url": "Full URL of machineswitch.php, e.g. https://example.org/mars/machineswitch.php",
+          "api_key": "Value of $config_mars_api_key on the server"
+        }
+      },
+      "reconfigure": {
+        "title": "MARS backend",
+        "data": {
+          "api_url": "API URL",
+          "api_key": "API key (X-MARS-Key)",
+          "verify_ssl": "Verify SSL certificate"
+        }
       }
     },
-    "abort": { "already_configured": "Already configured" }
+    "error": {
+      "cannot_connect": "Cannot reach the backend (or database error)",
+      "invalid_auth": "API key rejected"
+    },
+    "abort": {
+      "already_configured": "This backend is already configured",
+      "reconfigure_successful": "Reconfiguration successful"
+    }
+  },
+  "config_subentries": {
+    "unit": {
+      "entry_type": "Unit",
+      "initiate_flow": {
+        "user": "Add machine or door"
+      },
+      "step": {
+        "user": {
+          "title": "Add machine or door",
+          "data": {
+            "name": "Name",
+            "kind": "Kind",
+            "unit_id": "Unit ID"
+          },
+          "data_description": {
+            "unit_id": "Reader ID in MARS (schulung.reader_id), e.g. 1720. The entrance door is 1."
+          }
+        },
+        "hardware": {
+          "title": "Hardware for {name}",
+          "description": "Choose the reader device and the entities it provides.",
+          "data": {
+            "reader_device": "Reader device",
+            "display_line1": "Display line 1 (text entity)",
+            "display_line2": "Display line 2 (text entity)",
+            "power_entity": "Switch target (relay or smart plug)",
+            "interlock_1": "Interlock switch 1",
+            "interlock_2": "Interlock switch 2",
+            "machine_type": "Billing type",
+            "min_balance": "Minimum balance",
+            "shutdown_time": "Cooldown time",
+            "pulse_time": "Door pulse time"
+          },
+          "data_description": {
+            "reader_device": "Card scans from this device control the unit",
+            "power_entity": "Reader relay or any switch (Zigbee/WiFi plug). For doors: the door opener relay.",
+            "interlock_1": "Door/guard switch (on = open). The machine only runs while all are closed.",
+            "shutdown_time": "Power stays on this long after stop (e.g. 60 s for 3D printers)"
+          }
+        }
+      },
+      "error": {
+        "unit_exists": "This unit ID is already in use",
+        "reader_in_use": "This reader is already assigned to another unit"
+      },
+      "abort": {
+        "reconfigure_successful": "Reconfiguration successful"
+      }
+    }
+  },
+  "selector": {
+    "kind": {
+      "options": {
+        "machine": "Machine",
+        "door": "Door"
+      }
+    },
+    "machine_type": {
+      "options": {
+        "machine": "Machine (free)",
+        "laser": "Laser",
+        "3dprint": "3D printer",
+        "dtf": "DTF printer",
+        "kiln": "Kiln"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Idle",
+          "checking": "Checking",
+          "active": "Active",
+          "stopping": "Stopping",
+          "cooldown": "Cooldown",
+          "admin": "Admin mode",
+          "out_of_order": "Out of order",
+          "message": "Message",
+          "interlock_open": "Door open"
+        }
+      },
+      "user": {
+        "name": "User"
+      },
+      "session_start": {
+        "name": "Session start"
+      },
+      "last_cost": {
+        "name": "Last cost"
+      },
+      "last_balance": {
+        "name": "Last balance"
+      },
+      "pending_bookings": {
+        "name": "Pending bookings"
+      },
+      "display": {
+        "name": "Display"
+      }
+    },
+    "binary_sensor": {
+      "session_active": {
+        "name": "Session active"
+      },
+      "interlock": {
+        "name": "Interlock"
+      }
+    },
+    "switch": {
+      "out_of_order": {
+        "name": "Out of order"
+      },
+      "admin": {
+        "name": "Admin mode"
+      }
+    },
+    "number": {
+      "min_balance": {
+        "name": "Minimum balance"
+      },
+      "shutdown_time": {
+        "name": "Cooldown time"
+      },
+      "pulse_time": {
+        "name": "Door pulse time"
+      }
+    },
+    "select": {
+      "machine_type": {
+        "name": "Billing type",
+        "state": {
+          "machine": "Machine (free)",
+          "laser": "Laser",
+          "3dprint": "3D printer",
+          "dtf": "DTF printer",
+          "kiln": "Kiln"
+        }
+      }
+    },
+    "button": {
+      "stop_session": {
+        "name": "Stop session"
+      },
+      "open_door": {
+        "name": "Open door"
+      }
+    }
   }
 }

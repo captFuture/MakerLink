@@ -1,0 +1,75 @@
+# Hardware-Adapter: ESP8266 D1 Mini + RC522 SPI RFID
+# Wird als Package inkludiert zusammen mit maker-reader-logic.yaml
+
+substitutions:
+  p_relay:    GPIO16
+  p_sda:      GPIO4
+  p_scl:      GPIO5
+  p_rfid_rst: GPIO0
+  p_rfid_ss:  GPIO15
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+logger:
+  baud_rate: 115200
+  level: DEBUG
+
+i2c:
+  sda: ${p_sda}
+  scl: ${p_scl}
+  scan: true
+  frequency: 100kHz
+
+spi:
+  clk_pin:  GPIO14
+  mosi_pin: GPIO13
+  miso_pin: GPIO12
+
+rc522_spi:
+  cs_pin:    ${p_rfid_ss}
+  reset_pin: ${p_rfid_rst}
+  update_interval: 1s
+  on_tag:
+    then:
+      - text_sensor.template.publish:
+          id: last_rfid
+          state: !lambda |-
+            // RC522: x = "F4-96-D2-03" → "0xf4%200x96%200xd2%200x3" (führende Nullen entfernt!)
+            std::string res = "";
+            std::string token = "";
+            bool first = true;
+            for (size_t i = 0; i <= x.size(); i++) {
+                char c = (i < x.size()) ? x[i] : '-';
+                if (c == '-') {
+                    if (!token.empty()) {
+                        if (!first) res += "%20";
+                        res += "0x";
+
+                        // Führende Null entfernen, falls vorhanden und Token länger als 1 Zeichen
+                        size_t start_idx = 0;
+                        if (token.length() > 1 && token[0] == '0') {
+                            start_idx = 1;
+                        }
+
+                        for (size_t j = start_idx; j < token.length(); j++) {
+                            res += (char)tolower(token[j]);
+                        }
+
+                        token = "";
+                        first = false;
+                    }
+                } else {
+                    token += c;
+                }
+            }
+            ESP_LOGI("rfid", "Tag RC522='%s' MARS='%s'", x.c_str(), res.c_str());
+            return res;
+      - lambda: |-
+          if (id(g_card_cooldown) > 0) {
+            ESP_LOGI("rfid", "Card ignored - cooldown %ds", id(g_card_cooldown));
+            return;
+          }
+          id(g_card_cooldown) = 5;
+          id(process_card_scan).execute();

@@ -2,10 +2,184 @@
   "config": {
     "step": {
       "user": {
-        "title": "MakerLink",
-        "data": { "host": "Host" }
+        "title": "MARS-Backend",
+        "description": "Verbindung zum MakerAustria-Zugangsserver (machineswitch.php).",
+        "data": {
+          "api_url": "API-URL",
+          "api_key": "API-Key (X-MARS-Key)",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "data_description": {
+          "api_url": "Vollständige URL von machineswitch.php, z. B. https://example.org/mars/machineswitch.php",
+          "api_key": "Wert von $config_mars_api_key auf dem Server"
+        }
+      },
+      "reconfigure": {
+        "title": "MARS-Backend",
+        "data": {
+          "api_url": "API-URL",
+          "api_key": "API-Key (X-MARS-Key)",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        }
       }
     },
-    "abort": { "already_configured": "Bereits konfiguriert" }
+    "error": {
+      "cannot_connect": "Backend nicht erreichbar (oder Datenbankfehler)",
+      "invalid_auth": "API-Key abgelehnt"
+    },
+    "abort": {
+      "already_configured": "Dieses Backend ist bereits eingerichtet",
+      "reconfigure_successful": "Neu konfiguriert"
+    }
+  },
+  "config_subentries": {
+    "unit": {
+      "entry_type": "Einheit",
+      "initiate_flow": {
+        "user": "Maschine oder Tür hinzufügen"
+      },
+      "step": {
+        "user": {
+          "title": "Maschine oder Tür hinzufügen",
+          "data": {
+            "name": "Name",
+            "kind": "Art",
+            "unit_id": "Unit-ID"
+          },
+          "data_description": {
+            "unit_id": "Reader-ID in MARS (schulung.reader_id), z. B. 1720. Die Eingangstür ist 1."
+          }
+        },
+        "hardware": {
+          "title": "Hardware für {name}",
+          "description": "Reader-Gerät und dessen Entitäten auswählen.",
+          "data": {
+            "reader_device": "Reader-Gerät",
+            "display_line1": "Display Zeile 1 (Text-Entität)",
+            "display_line2": "Display Zeile 2 (Text-Entität)",
+            "power_entity": "Schaltziel (Relais oder Steckdose)",
+            "interlock_1": "Sicherheitsschalter 1",
+            "interlock_2": "Sicherheitsschalter 2",
+            "machine_type": "Abrechnungsart",
+            "min_balance": "Mindestguthaben",
+            "shutdown_time": "Nachlaufzeit",
+            "pulse_time": "Türöffner-Impuls"
+          },
+          "data_description": {
+            "reader_device": "Kartenscans dieses Geräts steuern die Einheit",
+            "power_entity": "Relais am Reader oder beliebiger Schalter (Zigbee-/WLAN-Steckdose). Bei Türen: das Türöffner-Relais.",
+            "interlock_1": "Tür-/Schutzschalter (an = offen). Die Maschine läuft nur, wenn alle geschlossen sind.",
+            "shutdown_time": "So lange bleibt der Strom nach dem Stop an (z. B. 60 s bei 3D-Druckern)"
+          }
+        }
+      },
+      "error": {
+        "unit_exists": "Diese Unit-ID ist bereits vergeben",
+        "reader_in_use": "Dieser Reader ist bereits einer anderen Einheit zugeordnet"
+      },
+      "abort": {
+        "reconfigure_successful": "Neu konfiguriert"
+      }
+    }
+  },
+  "selector": {
+    "kind": {
+      "options": {
+        "machine": "Maschine",
+        "door": "Tür"
+      }
+    },
+    "machine_type": {
+      "options": {
+        "machine": "Maschine (kostenlos)",
+        "laser": "Laser",
+        "3dprint": "3D-Drucker",
+        "dtf": "DTF-Drucker",
+        "kiln": "Brennofen"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Bereit",
+          "checking": "Prüfe",
+          "active": "Aktiv",
+          "stopping": "Stoppt",
+          "cooldown": "Nachlauf",
+          "admin": "Admin-Modus",
+          "out_of_order": "Außer Betrieb",
+          "message": "Meldung",
+          "interlock_open": "Tür offen"
+        }
+      },
+      "user": {
+        "name": "Benutzer"
+      },
+      "session_start": {
+        "name": "Sessionbeginn"
+      },
+      "last_cost": {
+        "name": "Letzte Kosten"
+      },
+      "last_balance": {
+        "name": "Letztes Guthaben"
+      },
+      "pending_bookings": {
+        "name": "Offene Buchungen"
+      },
+      "display": {
+        "name": "Display"
+      }
+    },
+    "binary_sensor": {
+      "session_active": {
+        "name": "Session aktiv"
+      },
+      "interlock": {
+        "name": "Sicherheitsschalter"
+      }
+    },
+    "switch": {
+      "out_of_order": {
+        "name": "Außer Betrieb"
+      },
+      "admin": {
+        "name": "Admin-Modus"
+      }
+    },
+    "number": {
+      "min_balance": {
+        "name": "Mindestguthaben"
+      },
+      "shutdown_time": {
+        "name": "Nachlaufzeit"
+      },
+      "pulse_time": {
+        "name": "Türöffner-Impuls"
+      }
+    },
+    "select": {
+      "machine_type": {
+        "name": "Abrechnungsart",
+        "state": {
+          "machine": "Maschine (kostenlos)",
+          "laser": "Laser",
+          "3dprint": "3D-Drucker",
+          "dtf": "DTF-Drucker",
+          "kiln": "Brennofen"
+        }
+      }
+    },
+    "button": {
+      "stop_session": {
+        "name": "Session beenden"
+      },
+      "open_door": {
+        "name": "Tür öffnen"
+      }
+    }
   }
 }

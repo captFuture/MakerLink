@@ -1,0 +1,14 @@
+# NEW
+substitutions:
+  devicename:        "maker1720"
+  friendly_name:     "Reader_Bambulab_P1P_Rot"
+  device_initial_id: "1720"
+  static_ip:         "192.168.20.176"
+  gateway_ip:        "192.168.20.1"
+  machine_type:      "3dprint"
+  mars_api_key:      !secret mars_api_key
+  crm_api_base_url:  !secret crm_api_base_url
+
+packages:
+  hw:    !include hardware/maker-reader-hw-esp8266.yaml
+  logic: !include logic/maker-reader-logic.yaml

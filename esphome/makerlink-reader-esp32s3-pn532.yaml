@@ -1,0 +1,62 @@
+# MakerLink Reader: ESP32-S3 Super Mini + PN532 (I2C) + LCD 16x2 (PCF8574)
+# Optional: Relais und 1–2 Sicherheitsschalter (Tür/Schutzhaube).
+# Pins an die eigene Platine anpassen.
+
+substitutions:
+  devicename: makerlink-reader
+  friendly_name: MakerLink Reader
+  p_sda: GPIO8
+  p_scl: GPIO9
+  p_relay: GPIO4
+  p_switch1: GPIO5
+  p_switch2: GPIO6
+
+packages:
+  base: !include common/makerlink-reader-base.yaml
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+i2c:
+  sda: ${p_sda}
+  scl: ${p_scl}
+  scan: true
+  frequency: 100kHz
+
+pn532_i2c:
+  update_interval: 500ms
+  on_tag:
+    then:
+      - script.execute:
+          id: card_scanned
+          uid: !lambda "return x;"
+
+switch:
+  - platform: gpio
+    id: relay
+    name: "Relais"
+    pin: ${p_relay}
+    # Nach einem Reboot immer aus; die Integration entscheidet über den Zustand.
+    restore_mode: ALWAYS_OFF
+
+binary_sensor:
+  # Schalter gegen GND, interner Pull-up: geschlossen = LOW = "off" (zu), offen = "on".
+  # Nicht benötigte Schalter einfach löschen.
+  - platform: gpio
+    name: "Sicherheitsschalter 1"
+    device_class: door
+    pin:
+      number: ${p_switch1}
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on_off: 50ms
+  - platform: gpio
+    name: "Sicherheitsschalter 2"
+    device_class: door
+    pin:
+      number: ${p_switch2}
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on_off: 50ms

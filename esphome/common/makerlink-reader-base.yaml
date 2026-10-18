@@ -1,0 +1,84 @@
+# MakerLink Reader – gemeinsame Basis ("dummer" Reader)
+# Keine Business-Logik: Karten-UID → HA-Event, Display ← 2 Text-Entitäten.
+# Die Hardware-Datei muss bereitstellen: i2c (Display), Kartenleser mit
+# on_tag → script.execute: {id: card_scanned, uid: x}, optional Relais/Schalter.
+
+substitutions:
+  display_i2c_address: "0x27"
+
+esphome:
+  name: ${devicename}
+  friendly_name: ${friendly_name}
+  project:
+    # Wird von der MakerLink-Integration für die Auto-Discovery erkannt.
+    name: makeraustria.makerlink_reader
+    version: "0.2.0"
+
+logger:
+
+api:
+  id: api_server
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${devicename}-setup"
+
+captive_portal:
+
+script:
+  - id: card_scanned
+    mode: single
+    parameters:
+      uid: string
+    then:
+      # Event statt tag_scanned: Mitgliedskarten landen nicht in der HA-Tag-Registry.
+      - homeassistant.event:
+          event: esphome.makerlink_tag
+          data:
+            uid: !lambda "return uid;"
+      - delay: 1s  # entprellt Mehrfachlesungen derselben Karte
+
+text:
+  - platform: template
+    id: line1
+    name: "Display Zeile 1"
+    mode: text
+    optimistic: true
+    max_length: 16
+    initial_value: "-MakerAustria-"
+  - platform: template
+    id: line2
+    name: "Display Zeile 2"
+    mode: text
+    optimistic: true
+    max_length: 16
+    initial_value: "Verbinde..."
+
+sensor:
+  - platform: wifi_signal
+    name: "WLAN Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+
+display:
+  - platform: lcd_pcf8574
+    id: lcd
+    dimensions: 16x2
+    address: ${display_i2c_address}
+    update_interval: 250ms
+    lambda: |-
+      if (!id(api_server).is_connected()) {
+        it.print(0, 0, "-MakerAustria-");
+        it.print(0, 1, "HA offline");
+        return;
+      }
+      it.print(0, 0, id(line1).state.c_str());
+      it.print(0, 1, id(line2).state.c_str());
