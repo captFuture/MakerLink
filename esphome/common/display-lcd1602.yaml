@@ -1,5 +1,6 @@
 # Display: LCD 16x2 (HD44780) mit PCF8574-I2C-Backpack
-# Zeigt die zwei Text-Entitäten line1/line2 aus makerlink-reader-base.yaml.
+# Zeigt die zwei Text-Entitäten line1/line2. Erwartet die Substitutions
+# link_connected / link_offline_text (aus der Basis bzw. dem Zigbee-Hardware-Paket).
 
 substitutions:
   display_i2c_address: "0x27"   # manche Backpacks: 0x3F
@@ -11,9 +12,9 @@ display:
     address: ${display_i2c_address}
     update_interval: 250ms
     lambda: |-
-      if (!id(api_server).is_connected()) {
+      if (!(${link_connected})) {
         it.print(0, 0, "-MakerAustria-");
-        it.print(0, 1, "HA offline");
+        it.print(0, 1, "${link_offline_text}");
         return;
       }
       it.print(0, 0, id(line1).state.c_str());

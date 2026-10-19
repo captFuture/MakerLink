@@ -2,8 +2,8 @@
 # Details zur Hardware: common/esp32s3-supermini-pn532-hsu.yaml
 
 substitutions:
-  devicename: makerlink-reader
-  friendly_name: MakerLink Reader
+  devicename: makerlink-reader-oled-supermini
+  friendly_name: MakerLink Reader OLED Super Mini
   # Am I2C-Bus hängt nur das OLED (der PN532 läuft über HSU): volle Geschwindigkeit,
   # damit das Neuzeichnen (512 Byte pro Bild) die Hauptschleife kaum blockiert.
   i2c_frequency: 400kHz

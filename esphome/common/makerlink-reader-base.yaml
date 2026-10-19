@@ -3,6 +3,11 @@
 # Dazu kommen ein Hardware-Paket (i2c, Kartenleser → script card_scanned,
 # optional Relais/Schalter) und ein Display-Paket (common/display-*.yaml).
 
+substitutions:
+  # Für die Display-Pakete: Verbindung zu Home Assistant (WLAN + ESPHome-API).
+  link_connected: "id(api_server).is_connected()"
+  link_offline_text: "HA offline"
+
 esphome:
   name: ${devicename}
   friendly_name: ${friendly_name}

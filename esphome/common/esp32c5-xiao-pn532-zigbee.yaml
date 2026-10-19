@@ -1,0 +1,273 @@
+# Hardware + Funk: Seeed XIAO ESP32-C5 + PN532 (HSU/UART) über ZIGBEE (Machbarkeit)
+# https://www.espboards.dev/esp32/xiao-esp32c5/
+#
+# Ersetzt bei Zigbee-Readern makerlink-reader-base.yaml: kein WLAN, keine
+# ESPHome-API, keine OTA. Firmware-Updates nur per USB.
+#
+# XIAO-Belegung (gleiche D-Pins wie die XIAO-ESP32-S3-Variante):
+#   D0 = Relais | D4/D5 = I2C (Display) | D6/D7 = PN532 HSU | D8/D9 = Schalter
+#   BOOT (GPIO28): > 5 s halten = Zigbee zurücksetzen + neu koppeln (LED blinkt)
+#   User-LED (GPIO27): zeigt den Relais-Zustand
+#
+# Zigbee über die externe Komponente luar123/zigbee_esphome (ESP-IDF). Die
+# native ESPHome-Zigbee-Komponente kann auf ESP32 keine Switches/Texte.
+#
+# Zigbee-Modell (für ZHA, Quirk folgt in der nächsten Stufe):
+#   Endpoint 1  ON_OFF (0x0006) Attr 0x0000 bool    Relais, schaltbar, Report
+#               0xFC00 (eigener Cluster) Attr 0x0000 STRING  Kartenscan "<n>:<UID>", Report
+#   Endpoint 2  BINARY_INPUT (0x000F) Attr 0x0055   Sicherheitsschalter 1 (an = offen)
+#   Endpoint 3  BINARY_INPUT (0x000F) Attr 0x0055   Sicherheitsschalter 2 (an = offen)
+
+substitutions:
+  p_relay:    GPIO1    # D0
+  p_sda:      GPIO23   # D4 / SDA
+  p_scl:      GPIO24   # D5 / SCL
+  p_pn532_tx: GPIO11   # D6 / TX  (ESP TX → PN532 RX)
+  p_pn532_rx: GPIO12   # D7 / RX  (ESP RX ← PN532 TX)
+  p_input1:   GPIO8    # D8  Sicherheitsschalter 1
+  p_input2:   GPIO9    # D9  Sicherheitsschalter 2
+  p_boot:     GPIO28   # BOOT-Taster (onboard)
+  p_led:      GPIO27   # User-LED (onboard, active low)
+  i2c_frequency: 400kHz
+  # Für die Display-Pakete: Verbindung = Zigbee-Netz beigetreten.
+  link_connected: "id(zb).is_connected()"
+  link_offline_text: "Zigbee koppeln"
+
+esphome:
+  name: ${devicename}
+  friendly_name: ${friendly_name}
+  project:
+    name: makeraustria.makerlink_reader_zigbee
+    version: "0.3.0"
+  includes:
+    # Pfad relativ zum ESPHome-Config-Ordner (siehe esphome/README.md).
+    - makerlink/pn532_uart.h
+  on_boot:
+    priority: -100
+    then:
+      - text.set: { id: line1, value: "-MakerAustria-" }
+      - text.set: { id: line2, value: "Karte bitte" }
+
+external_components:
+  # Auf einen Commit festgelegt, damit Builds reproduzierbar bleiben.
+  - source: github://luar123/zigbee_esphome@b6caf39e9485d2d14bcdcfbafe5cf8e58d74fbff
+    components: [zigbee]
+
+esp32:
+  board: seeed_xiao_esp32c5
+  framework:
+    type: esp-idf   # Zigbee-Stack braucht ESP-IDF; PN532 daher über pn532_uart.h
+  flash_size: 8MB
+
+logger:
+  level: DEBUG
+  hardware_uart: USB_SERIAL_JTAG
+
+uart:
+  - id: pn532_uart
+    tx_pin: ${p_pn532_tx}
+    rx_pin: ${p_pn532_rx}
+    baud_rate: 115200
+
+i2c:
+  sda: ${p_sda}
+  scl: ${p_scl}
+  scan: true
+  frequency: ${i2c_frequency}
+
+globals:
+  - id: g_pn532_ready
+    type: bool
+    initial_value: "false"
+  - id: g_scan_counter
+    type: uint8_t
+    initial_value: "0"
+
+# Display-Zeilen (lokal gesetzt; in der nächsten Stufe schreibt sie die Integration über Zigbee)
+text:
+  - platform: template
+    id: line1
+    internal: true
+    mode: text
+    optimistic: true
+    max_length: 16
+    initial_value: "-MakerAustria-"
+  - platform: template
+    id: line2
+    internal: true
+    mode: text
+    optimistic: true
+    max_length: 16
+    initial_value: "Karte bitte"
+
+# Letzter Kartenscan, wird per Zigbee an den Coordinator gemeldet.
+# Format "<n>:<UID>" (n = 0..255 fortlaufend), damit dieselbe Karte erneut als Scan zählt.
+text_sensor:
+  - platform: template
+    id: card_scan
+    name: "Kartenscan"
+
+output:
+  - platform: gpio
+    id: user_led
+    pin:
+      number: ${p_led}
+      inverted: true   # LED leuchtet bei LOW
+
+switch:
+  - platform: gpio
+    id: relay
+    name: "Relais"
+    pin: ${p_relay}
+    # Nach einem Reboot immer aus; die Integration entscheidet über den Zustand.
+    restore_mode: ALWAYS_OFF
+    on_turn_on:
+      - if:
+          condition: { script.is_running: pairing_blink }
+          else: [ output.turn_on: user_led ]
+    on_turn_off:
+      - if:
+          condition: { script.is_running: pairing_blink }
+          else: [ output.turn_off: user_led ]
+
+script:
+  # LED blinkt, solange der Reader ein Zigbee-Netz sucht (max. 3 Minuten).
+  - id: pairing_blink
+    mode: restart
+    then:
+      - repeat:
+          count: 360
+          then:
+            - output.turn_on: user_led
+            - delay: 250ms
+            - output.turn_off: user_led
+            - delay: 250ms
+      - script.execute: led_show_relay
+  - id: led_show_relay
+    then:
+      - if:
+          condition: { switch.is_on: relay }
+          then: [ output.turn_on: user_led ]
+          else: [ output.turn_off: user_led ]
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          // PN532 initialisieren (bei Fehler jede Sekunde neu versuchen)
+          static PN532_UART pn532(id(pn532_uart));
+          static std::string last_tag = "";
+          static uint8_t misses = 0;
+          if (!pn532.ready) {
+            pn532.begin();
+            id(g_pn532_ready) = pn532.ready;
+            if (!pn532.ready) return;
+          }
+
+          std::string tag = pn532.read_tag();   // "F4-96-D2-28" oder ""
+          if (tag.empty()) {
+            if (misses < 2) misses++;
+            else last_tag = "";
+            return;
+          }
+          misses = 0;
+          if (tag == last_tag) return;   // Karte liegt noch auf: nur einmal melden
+          last_tag = tag;
+
+          id(g_scan_counter)++;
+          std::string value = std::to_string(id(g_scan_counter)) + ":" + tag;
+          ESP_LOGI("rfid", "Tag PN532='%s' -> Zigbee '%s'", tag.c_str(), value.c_str());
+          id(card_scan).publish_state(value);
+
+binary_sensor:
+  - platform: template
+    id: pn532_ready
+    name: "PN532 bereit"
+    internal: true
+    lambda: "return id(g_pn532_ready);"
+  # Schalter gegen GND, interner Pull-up: geschlossen = LOW = "off" (zu), offen = "on".
+  - platform: gpio
+    id: interlock_1
+    name: "Sicherheitsschalter 1"
+    device_class: door
+    pin:
+      number: ${p_input1}
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+  - platform: gpio
+    id: interlock_2
+    name: "Sicherheitsschalter 2"
+    device_class: door
+    pin:
+      number: ${p_input2}
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+  # BOOT-Taster: > 5 s halten = Netz verlassen, zurücksetzen und neu koppeln.
+  - platform: gpio
+    id: boot_button
+    internal: true
+    pin:
+      number: ${p_boot}
+      mode: INPUT_PULLUP
+      inverted: true
+    on_multi_click:
+      - timing:
+          - ON for at least 5s
+        then:
+          - logger.log: "BOOT > 5s: Zigbee-Reset, Kopplungsmodus"
+          - text.set: { id: line1, value: "Zigbee Reset" }
+          - text.set: { id: line2, value: "Koppeln..." }
+          - script.execute: pairing_blink
+          - zigbee.reset: zb
+
+zigbee:
+  id: zb
+  name: "MakerLink Reader"      # Model-ID, darauf matcht später der ZHA-Quirk
+  manufacturer: "MakerAustria"
+  power_supply: 1               # Netzbetrieb (USB)
+  endpoints:
+    - num: 1
+      device_type: ON_OFF_OUTPUT
+      clusters:
+        - id: ON_OFF
+          attributes:
+            - attribute_id: 0x0000
+              type: bool
+              report: true
+              device: relay
+        - id: 0xFC00                  # MakerLink-Cluster (herstellerspezifisch)
+          attributes:
+            - attribute_id: 0x0000    # Kartenscan "<n>:<UID>"
+              type: STRING
+              max_length: 32
+              report: true
+              device: card_scan
+    - num: 2
+      device_type: SIMPLE_SENSOR
+      clusters:
+        - id: BINARY_INPUT
+          attributes:
+            - attribute_id: 0x0055    # PresentValue
+              type: bool
+              report: true
+              device: interlock_1
+    - num: 3
+      device_type: SIMPLE_SENSOR
+      clusters:
+        - id: BINARY_INPUT
+          attributes:
+            - attribute_id: 0x0055
+              type: bool
+              report: true
+              device: interlock_2
+  on_join:
+    then:
+      - logger.log: "Zigbee-Netz beigetreten"
+      - script.stop: pairing_blink
+      - script.execute: led_show_relay
+      - text.set: { id: line1, value: "-MakerAustria-" }
+      - text.set: { id: line2, value: "Karte bitte" }

@@ -115,7 +115,17 @@ Das Schaltziel ist eine beliebige `switch`-Entity (ZHA/Z2M, Shelly, Tasmota …)
 - **Aktionen:** `makerlink/action` mit `stop_session`, `open_door`, `out_of_order` und `admin` ist für alle angemeldeten Benutzer erlaubt, genau wie das Schalten der Entitäten.
 - **Später:** Protokoll der letzten Scans und Ablehnungen (Ringpuffer).
 
-### 3.5 Discovery und Onboarding (Phase 1b)
+### 3.5 Zigbee-Reader (XIAO ESP32-C5, ZHA)
+- **Stufe 1, Machbarkeit (Firmware):** `esphome/common/esp32c5-xiao-pn532-zigbee.yaml` mit [luar123/zigbee_esphome](https://github.com/luar123/zigbee_esphome) auf ESP-IDF und PN532 über `pn532_uart.h`.
+  - Endpoint 1: On/Off (Relais) und herstellerspezifischer Cluster `0xFC00` (Attr `0x0000` STRING = Kartenscan `"<n>:<UID>"`, wird gemeldet).
+  - Endpoint 2/3: Binary Input (Sicherheitsschalter).
+  - BOOT > 5 s = `zigbee.reset` (Netz verlassen und neu koppeln), User-LED = Relais-Zustand.
+  - Kompiliert, aber noch nicht an ZHA getestet.
+- **Stufe 2, ZHA-Quirk:** Custom-Cluster `0xFC00` definieren. Ein Kartenscan wird als `zha_event` (`command: card_scanned`, `args: {uid}`) weitergegeben. Display-Attribute `0x0001`/`0x0002` (STRING, schreibbar) kommen hinzu. Dafür muss die Firmware geschriebene String-Attribute auslesen können: `on_value` gibt es nur für Zahlen, eventuell ist Polling nötig.
+- **Stufe 3, Integration:** Reader-Adapter für ZHA-Geräte. Kartenscan über `zha_event` (Zuordnung per `device_id`), Display über `zha.set_zigbee_cluster_attribute`. Schalter und Sicherheitsschalter laufen wie bisher über die normalen Entitäten.
+- **Grenzen:** kein OTA über Zigbee, Reaktionszeit des Funknetzes, C5-Zigbee laut Hersteller weniger erprobt als H2/C6.
+
+### 3.6 Discovery und Onboarding (Phase 1b)
 Die Firmware setzt `esphome: project: name: makeraustria.makerlink_reader`. `discovery.py` erkennt solche Geräte im Device-Registry und startet einen Discovery-Flow, der die Entitäten des Geräts vorbelegt.
 
 ## 4. Offline-Fallback (Phase 1c)

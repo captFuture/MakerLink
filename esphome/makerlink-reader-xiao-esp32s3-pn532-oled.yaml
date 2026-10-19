@@ -1,0 +1,14 @@
+# MakerLink Reader: Seeed XIAO ESP32-S3 + PN532 (HSU) + 0,91" OLED 128x32 (SSD1306, I2C)
+# Details zur Hardware: common/esp32s3-xiao-pn532-hsu.yaml
+
+substitutions:
+  devicename: makerlink-reader-xiaos3
+  friendly_name: MakerLink Reader XIAO ESP32-S3
+  # Am I2C-Bus hängt nur das OLED (der PN532 läuft über HSU): volle Geschwindigkeit,
+  # damit das Neuzeichnen (512 Byte pro Bild) die Hauptschleife kaum blockiert.
+  i2c_frequency: 400kHz
+
+packages:
+  base: !include common/makerlink-reader-base.yaml
+  hardware: !include common/esp32s3-xiao-pn532-hsu.yaml
+  display: !include common/display-ssd1306-128x32.yaml

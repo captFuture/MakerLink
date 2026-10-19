@@ -1,5 +1,6 @@
 # Display: 0,91" OLED 128x32, SSD1306 über I2C
-# Zeigt die zwei Text-Entitäten line1/line2 aus makerlink-reader-base.yaml.
+# Zeigt die zwei Text-Entitäten line1/line2. Erwartet die Substitutions
+# link_connected / link_offline_text (aus der Basis bzw. dem Zigbee-Hardware-Paket).
 # 16 Zeichen pro Zeile wie beim LCD: Roboto Mono 12 px (~7,2 px Zeichenbreite,
 # 16 Zeichen ≈ 115 px), zwei Zeilen à 16 px Höhe inklusive Unterlängen.
 
@@ -20,9 +21,9 @@ display:
     address: ${oled_i2c_address}
     update_interval: 500ms
     lambda: |-
-      if (!id(api_server).is_connected()) {
+      if (!(${link_connected})) {
         it.print(0, 0, id(font_line), "-MakerAustria-");
-        it.print(0, 16, id(font_line), "HA offline");
+        it.print(0, 16, id(font_line), "${link_offline_text}");
         return;
       }
       it.print(0, 0, id(font_line), id(line1).state.c_str());

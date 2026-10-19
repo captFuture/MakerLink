@@ -124,3 +124,29 @@ Kontext: Der User hat `esphome/makerlink-reader-esp32s3-pn532-oled.yaml` als Kop
 - Aktionen: Session beenden, Nachlauf beenden, Admin-Modus, Außer Betrieb, Tür öffnen, Link zur Geräteseite.
 - Version 0.2.0 → 0.3.0 in `manifest.json` und im ESPHome-Projekt.
 - Geprüft: Das Panel wurde mit Fake-Daten in Chrome headless gerendert (hell, dunkel, schmal). Escaping und Layout stimmen. Ein Test im echten HA steht noch aus.
+
+## 2026-10-19 – XIAO ESP32-S3 und XIAO ESP32-C5 über Zigbee
+> the esp32s3 and xiao-esp32s3 have similar capabilities but different pins that can be used > i made a copy (makerlink-reader-xiao-esp32s3-pn532-oled and esp32s3-xiao-pn532-hsu.yaml) to get a demo working.
+> ADDITIONALLY > we want to get the same behaviour with a XIAO ESP32 C5 over zigbee > can we do a seperate config in /common/ for that? (every other pinout is the same) ... what i want is that the boot button on the C5 (gpio28 is activating pairing and resetting when it is long pressed >5s) ... the userLed (GPIO27 should indicate the relay status on or off)
+
+Kontext: Pinout `docs/layouts/esp32s3-xiao.png` beigelegt. Die beiden Kopien waren noch unverändert (Super-Mini-Pins, Top-Datei bindet die Super-Mini-Hardware ein).
+
+**Recherche-Ergebnisse (Stand ESPHome 2026.9):**
+- Die native ESPHome-Zigbee-Komponente (ab 2026.5) unterstützt den ESP32-C5. Auf ESP32 stellt sie aber nur `binary_sensor` und `sensor` bereit, kein Switch, kein Text, kein Event.
+- Die externe Komponente `luar123/zigbee_esphome` kann eigene Cluster und String-Attribute. Sie braucht ESP-IDF und ist auf dem C5 nicht getestet. OTA über Zigbee gibt es nicht.
+- `pn532_hsu.h` braucht Arduino (`HardwareSerial`), Zigbee braucht ESP-IDF. Der Treiber muss deshalb auf die ESPHome-`uart`-Komponente portiert werden.
+- XIAO ESP32-C5: D0=GPIO1, D1=GPIO0, D2=GPIO25 (Strapping), D3=GPIO7 (Strapping), D4/SDA=GPIO23, D5/SCL=GPIO24, D6/TX=GPIO11, D7/RX=GPIO12, D8=GPIO8, D9=GPIO9, D10=GPIO10. BOOT=GPIO28, User-LED=GPIO27 (Polarität unklar, vermutlich active-low).
+
+**Entscheidungen (Rückfragen):**
+| Frage | Antwort |
+|---|---|
+| Zigbee-Coordinator | ZHA |
+| XIAO-Pinbelegung | Vorschlag: D0 Relais, D4/D5 I2C, D6/D7 PN532 HSU, D8/D9 Schalter |
+| Vorgehen C5 | Erst Machbarkeit: PN532-Port, minimale Zigbee-Firmware mit Kartenscan, Relais, LED, BOOT-Taste. Display und Integrations-Anbindung folgen danach. |
+
+**Umgesetzt:**
+- XIAO-ESP32-S3-Dateien mit XIAO-Pins und Board `seeed_xiao_esp32s3`. Die Top-Datei bindet jetzt die XIAO-Hardware ein.
+- Neuer Treiber `esphome/pn532_uart.h` (ESPHome-uart, ESP-IDF-tauglich). Dabei ist der Pufferüberlauf aus `pn532_hsu.h` behoben.
+- `common/esp32c5-xiao-pn532-zigbee.yaml` und `makerlink-reader-xiao-esp32c5-pn532-oled-zigbee.yaml`.
+- Display-Pakete nutzen jetzt die Substitutions `link_connected`/`link_offline_text` (WLAN: HA-API, Zigbee: Netz beigetreten).
+- Geprüft: Alle fünf Varianten bestehen `esphome config`. XIAO-S3 und XIAO-C5 kompilieren, Hardware- und ZHA-Test stehen aus.

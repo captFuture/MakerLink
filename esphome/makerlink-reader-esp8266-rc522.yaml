@@ -3,8 +3,8 @@
 # bisherige Firmware, aber ohne Business-Logik.
 
 substitutions:
-  devicename: makerlink-reader
-  friendly_name: MakerLink Reader
+  devicename: makerlink-reader-wemos
+  friendly_name: MakerLink Reader Wemos D1 Mini
   p_relay: GPIO16
   p_sda: GPIO4
   p_scl: GPIO5
@@ -30,7 +30,7 @@ spi:
 
 rc522_spi:
   cs_pin: ${p_rfid_ss}
-  reset_pin: ${p_rfid_rst}
+  reset_pin: ${. }
   update_interval: 1s
   on_tag:
     then:
