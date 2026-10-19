@@ -150,3 +150,29 @@ Kontext: Pinout `docs/layouts/esp32s3-xiao.png` beigelegt. Die beiden Kopien war
 - `common/esp32c5-xiao-pn532-zigbee.yaml` und `makerlink-reader-xiao-esp32c5-pn532-oled-zigbee.yaml`.
 - Display-Pakete nutzen jetzt die Substitutions `link_connected`/`link_offline_text` (WLAN: HA-API, Zigbee: Netz beigetreten).
 - Geprüft: Alle fünf Varianten bestehen `esphome config`. XIAO-S3 und XIAO-C5 kompilieren, Hardware- und ZHA-Test stehen aus.
+
+## 2026-10-19 – PN532-Treiber nach esphome/makerlink/
+> ich habe die pn532 dateien in den korrekten ordner /makerlink/ verschoben, damit die struktur einfacher zum kopieren in home-assistant ist
+
+**Folge:**
+- Der Inhalt von `esphome/` wird 1:1 nach `/config/esphome/` kopiert. Die Include-Pfade `makerlink/pn532_*.h` passen dazu, im README angepasst.
+- Beim Prüfen gefunden und behoben: In `makerlink-reader-esp8266-rc522.yaml` stand `reset_pin: ${. }` (aus Commit b1404cb) statt `${p_rfid_rst}`.
+- Alle fünf Varianten bestehen mit dem neuen Layout `esphome config`.
+
+## 2026-10-19 – XIAO-S3-Demo: PN532 antwortet nicht
+> (Screenshot Web-Serial-Log „MakerLink Reader XIAO ESP32-S3“: jede Sekunde `[E][pn532:051]: GetFirmwareVersion failed (no response)`, `safe_mode: Boot seems successful`)
+
+**Analyse:** Die Firmware läuft, aber auf dem UART kommt nichts zurück. Aktiv sind D6/D7 = GPIO43/44, die Datei enthält aber auch den Kommentar „verdrahtet“ mit GPIO4/5. Wahrscheinlichste Ursache: Firmware-Pins und Verdrahtung passen nicht zusammen. Weitere Kandidaten: TX/RX vertauscht, PN532 nicht auf HSU gejumpert, Versorgung.
+
+## 2026-10-19 – Relais am XIAO
+> kontrolliere das mit dem https://wiki.seeedstudio.com/relay_add_on_module_for_xiao/ nochmal > das relay schaltet meiner meinung nach nicht (ich höre kein klicken)
+
+**Ergebnis:**
+- Das Seeed Relay Add-on schaltet über **D1**.
+- In der S3-Datei stand `GPIO0 # D1`. Beim XIAO-S3 ist D1 aber **GPIO2**, GPIO0 ist dort der BOOT-Strapping-Pin und liegt auf keinem Header-Pin.
+- Korrigiert: S3 D1 = GPIO2, C5 D1 = GPIO0 (vorher D0/GPIO1). D0 ist jetzt frei.
+
+## 2026-10-19 – Version bei jedem Push
+> merke dir bei jedem git push die versionsnummer zu erhöhen, damit hacs das auch mitbekommt
+
+**Folge:** Als Regel in `CLAUDE.md` und im Memory festgehalten. Version jetzt 0.3.0 → **0.3.1** (Fixes: Relais-Pin XIAO, ESP8266 `reset_pin`, README-Struktur).

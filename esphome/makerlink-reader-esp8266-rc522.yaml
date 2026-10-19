@@ -30,7 +30,7 @@ spi:
 
 rc522_spi:
   cs_pin: ${p_rfid_ss}
-  reset_pin: ${. }
+  reset_pin: ${p_rfid_rst}
   update_interval: 1s
   on_tag:
     then:

@@ -29,7 +29,7 @@ Ist Home Assistant nicht verbunden, zeigt das Display „HA offline“.
 | `display-lcd1602.yaml` | LCD 16x2 (Adresse `display_i2c_address`, Standard 0x27) |
 | `display-ssd1306-128x32.yaml` | OLED 128x32 (Adresse `oled_i2c_address`, Standard 0x3C), Roboto Mono 12 px, 2×16 Zeichen |
 
-PN532-Treiber:
+PN532-Treiber (in `makerlink/`):
 - `pn532_hsu.h`: unverändert aus der bestehenden Firmware. Nutzt `HardwareSerial` und braucht daher das Arduino-Framework.
 - `pn532_uart.h`: dasselbe Protokoll über die ESPHome-`uart`-Komponente. Läuft auch mit ESP-IDF, was Zigbee voraussetzt. Die Puffer sind außerdem auf 32 Byte vergrößert, im Original konnte `begin()` über `resp[12]` hinausschreiben.
 
@@ -53,7 +53,7 @@ Gleiche D-Pins auf beiden Boards, nur die GPIO-Nummern unterscheiden sich:
 
 | XIAO-Pin | Funktion | ESP32-S3 | ESP32-C5 |
 |---|---|---|---|
-| D0 | Relais | GPIO1 | GPIO1 |
+| D1 | Relais (Seeed Relay Add-on for XIAO) | GPIO2 | GPIO0 |
 | D4 / SDA | Display SDA | GPIO5 | GPIO23 |
 | D5 / SCL | Display SCL | GPIO6 | GPIO24 |
 | D6 / TX | ESP TX → PN532 RX | GPIO43 | GPIO11 |
@@ -63,7 +63,7 @@ Gleiche D-Pins auf beiden Boards, nur die GPIO-Nummern unterscheiden sich:
 | BOOT (onboard) | > 5 s: Zigbee zurücksetzen und koppeln | – | GPIO28 |
 | User-LED (onboard) | zeigt den Relais-Zustand | – | GPIO27 (active low) |
 
-D1, D10 und die Strapping-Pins D2/D3 bleiben frei. Das Log läuft über USB (`USB_SERIAL_JTAG`), deshalb ist der Standard-UART an D6/D7 frei für den PN532.
+D0, D10 und die Strapping-Pins D2/D3 bleiben frei. Achtung: D1 ist beim S3 GPIO2, beim C5 GPIO0. GPIO0 ist beim S3 der BOOT-Pin. Das Log läuft über USB (`USB_SERIAL_JTAG`), deshalb ist der Standard-UART an D6/D7 frei für den PN532.
 
 ## XIAO ESP32-C5 über Zigbee (Machbarkeitsstufe)
 Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Updates gehen nur per USB. Die Zigbee-Anbindung übernimmt die externe Komponente [luar123/zigbee_esphome](https://github.com/luar123/zigbee_esphome), festgelegt auf einen geprüften Commit. Die native ESPHome-Zigbee-Komponente kann auf ESP32 keine Switches und keine Texte. Die Zigbee-Komponente verlangt ESP-IDF, deshalb nutzt diese Variante `pn532_uart.h`.
@@ -83,18 +83,17 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
 3. Erwartet werden ein Schalter (Relais) und zwei Binärsensoren (Sicherheitsschalter). Den Kartenscan siehst du ohne Quirk nur unter Gerät → „Zigbee-Gerät verwalten“ → Endpoint 1, Cluster `0xFC00`, Attribut `0x0000` lesen. Alternativ im HA-Log mit Debug für `zigpy`/`homeassistant.components.zha`.
 
 ## Einrichten
-1. Den Inhalt dieses Ordners in den ESPHome-Config-Ordner nach **`makerlink/`** kopieren. Der Include-Pfad `makerlink/pn532_hsu.h` setzt genau diesen Ordnernamen voraus:
+1. Den **Inhalt** dieses Ordners (`esphome/` im Repo) direkt in den ESPHome-Config-Ordner von Home Assistant kopieren (`/config/esphome/`). Die Gerätevarianten liegen dann direkt neben deinen Geräte-YAMLs, die Treiber in `makerlink/`. Der Include-Pfad `makerlink/pn532_*.h` gilt relativ zum Config-Ordner und setzt genau diese Struktur voraus:
    ```
-   esphome/
+   /config/esphome/
      secrets.yaml
-     maker9998.yaml
+     maker9998.yaml                         ← deine Geräte-YAML
+     makerlink-reader-esp32s3-pn532.yaml    ← Gerätevarianten aus dem Repo
+     makerlink-reader-xiao-…yaml
+     common/                                ← Bausteine
      makerlink/
        pn532_hsu.h
-       makerlink-reader-esp32s3-pn532.yaml
        pn532_uart.h
-       makerlink-reader-esp32s3-pn532-oled.yaml
-       makerlink-reader-xiao-…yaml
-       common/…
    ```
 2. Pro Gerät eine kleine YAML anlegen:
    ```yaml
@@ -104,8 +103,8 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
      # display_i2c_address: "0x3F"   # LCD, Standard 0x27
      # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
    packages:
-     reader: !include makerlink/makerlink-reader-esp32s3-pn532.yaml       # LCD
-     # reader: !include makerlink/makerlink-reader-esp32s3-pn532-oled.yaml  # OLED
+     reader: !include makerlink-reader-esp32s3-pn532.yaml         # LCD
+     # reader: !include makerlink-reader-esp32s3-pn532-oled.yaml  # OLED
    ```
    Die OLED-Variante lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
 3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password`, `api_encryption_key` (`openssl rand -base64 32`) und `ota_password`. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.

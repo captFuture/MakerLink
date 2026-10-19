@@ -3,8 +3,9 @@
 # Das Display kommt aus einem eigenen Paket (display-*.yaml).
 #
 # XIAO-Belegung (gleiche D-Pins wie die XIAO-ESP32-C5-Variante):
-#   D0 = Relais | D4/D5 = I2C (Display) | D6/D7 = PN532 HSU | D8/D9 = Schalter
-#   D2/D3 (Strapping) und D1/D10 bleiben frei.
+#   D1 = Relais | D4/D5 = I2C (Display) | D6/D7 = PN532 HSU | D8/D9 = Schalter
+#   D2/D3 (Strapping) und D0/D10 bleiben frei.
+#   D1 passt zum Seeed "Relay Add-on Module for XIAO" (wiki.seeedstudio.com/relay_add_on_module_for_xiao).
 #
 # Der PN532 läuft über HSU (UART), NICHT über I2C: Der ESP32 kommt mit dem
 # Clock-Stretching des PN532 nicht zurecht. ESPHome hat keine eigene
@@ -12,7 +13,7 @@
 # PN532-Modul auf HSU stellen: Schalter/Jumper I0 = 0, I1 = 0.
 
 substitutions:
-  p_relay:    GPIO1    # D0
+  p_relay:    GPIO2    # D1 (Seeed Relay Add-on for XIAO schaltet über D1; NICHT GPIO0 = BOOT-Pin)
   p_sda:      GPIO5    # D4 / SDA
   p_scl:      GPIO6    # D5 / SCL
   p_pn532_rx: "44"     # D7 / RX  (ESP RX ← PN532 TX)
