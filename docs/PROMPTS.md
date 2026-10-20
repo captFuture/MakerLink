@@ -191,3 +191,25 @@ Kontext: Pinout `docs/layouts/esp32s3-xiao.png` beigelegt. Die beiden Kopien war
 > wo wird die reader-id (unitid) gepflegt und verändert? Ein Reader soll nach dem onboarding standardmäßig die unitid 9999 haben, bis sie überschrieben wird (das ist die TEST-ID)
 
 **Ergebnis:** Die Unit-ID liegt in der Integration (Subentry pro Einheit, `unit_id`), nicht auf dem Reader. Vorher war sie Pflichtfeld ohne Vorgabe und nach dem Anlegen nicht änderbar. Jetzt: Vorgabe 9999 (`TEST_UNIT_ID`), 9999 darf mehrfach vergeben werden (kein `unique_id`), und **Neu konfigurieren** zeigt erst Name + Unit-ID, dann die Hardware.
+
+## 2026-10-20 – OTA-Passwort durch Verschlüsselung ersetzen
+> WARNING 'ota' password wastes significant flash and RAM (about 3.5 KB and 60 bytes plus the password on the heap): the device already offers encryption with the 'api' encryption key, which authenticates any uploader that takes it, and a password only matters for uploaders without encryption support; remove 'password' and add 'encryption' under 'ota' so uploads use the key and encryption is required
+
+**Ergebnis:** `common/makerlink-reader-base.yaml`: `ota: password` entfernt, stattdessen `encryption: key: !secret api_encryption_key`. `ota_password` entfällt aus den Secrets (beide READMEs angepasst).
+
+## 2026-10-20 – ESPHome-Bausteine überarbeiten (Planung)
+> rework the esphome stuff: (plan first and give me options and lets discuss)
+> - it should be possible to use both > oled and lcd without reflashing
+> - The lcd normally needs 5v (the oled 3)
+> - i want to keep the amount of configurations as low as possible
+> - is it feasable to put it on the same i2c or better on a seperate one (my preference because of pin amount would be seperate)
+> - The WEMOS version is a legacy reader which is already present 30 times and just needs to be reflashed, the others are new hardware to be built
+
+**Status:** Diskussion, Plan vorgeschlagen.
+
+## 2026-10-20 – ESPHome-Umbau freigegeben
+> leg los und mach es wie vorgeschlagen.
+> Der wemos bleibt so (ich kann nichts umbauen) - die bestehenden reader muss ich sowieso manuell per usb flashen und dann onboarden.
+> Behalte supermini xiao s3 und c5 Beide displays
+
+**Ergebnis:** Drei Geräte-YAMLs statt fünf: `makerlink-reader-esp32s3.yaml` (Super Mini oder XIAO per `board`), `makerlink-reader-xiao-esp32c5-zigbee.yaml`, `makerlink-reader-esp8266-rc522-lcd.yaml` (unverändert). `common/display-dual.yaml` enthält LCD und OLED, `common/esp32s3-pn532-hsu.yaml` ersetzt die zwei S3-Hardwarepakete (Jinja-Substitutions je nach `board`). S3: zwei getrennte I2C-Busse (OLED 400 kHz, LCD 50 kHz hinter Pegelwandler). C5: nur ein Hardware-I2C-Bus, deshalb ein gemeinsamer Bus mit 100 kHz.

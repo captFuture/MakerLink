@@ -41,19 +41,20 @@ HACS installiert nur die Integration (`custom_components/makerlink/`). Die Reade
 ```
 Die Ordnerstruktur darf nicht verändert werden, die Include-Pfade (`common/…`, `makerlink/pn532_*.h`) gelten relativ zu `/config/esphome/`.
 
-**2. `secrets.yaml`** (im selben Ordner) braucht: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz, bei Bedarf dieselben Werte oder ein Dummy), `api_encryption_key` (`openssl rand -base64 32`) und `ota_password`. API-Key und URL des MARS-Servers gehören nicht auf den Reader, die stehen nur in der Integration.
+**2. `secrets.yaml`** (im selben Ordner) braucht: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz, bei Bedarf dieselben Werte oder ein Dummy), `api_encryption_key` (`openssl rand -base64 32`). Der API-Schlüssel gilt auch für OTA-Uploads. API-Key und URL des MARS-Servers gehören nicht auf den Reader, die stehen nur in der Integration.
 
 **3. Reader definieren.** Pro Reader eine eigene kleine YAML anlegen, zB `maker9998.yaml`. Sie enthält nur Name und die passende Gerätevariante:
 ```yaml
 substitutions:
   devicename: maker9998        # eindeutig, nur Kleinbuchstaben, Ziffern, Bindestrich
   friendly_name: Reader Drucker 1
+  board: xiao                  # xiao | supermini (nur ESP32-S3)
   # display_i2c_address: "0x3F"   # LCD, Standard 0x27
   # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
 packages:
-  reader: !include makerlink-reader-esp32s3-pn532-oled.yaml
+  reader: !include makerlink-reader-esp32s3.yaml
 ```
-Welche Variante zu welcher Hardware gehört, steht in der Tabelle in [esphome/README.md](esphome/README.md). Die Gerätevarianten selbst nicht bearbeiten, sonst gehen Änderungen beim nächsten Update verloren. Eigene Anpassungen gehören in die Geräte-YAML.
+Beide Displays (LCD und OLED) sind in jeder neuen Firmware enthalten. Welche Variante zu welcher Hardware gehört, steht in der Tabelle in [esphome/README.md](esphome/README.md). Die Gerätevarianten selbst nicht bearbeiten, sonst gehen Änderungen beim nächsten Update verloren. Eigene Anpassungen gehören in die Geräte-YAML.
 
 **4. Flashen.** Beim ersten Mal per USB (ESPHome → Install → Plug into this computer / Manual download), danach per OTA über WLAN. Der Reader taucht dann in Home Assistant unter der ESPHome-Integration auf und wird dort hinzugefügt.
 

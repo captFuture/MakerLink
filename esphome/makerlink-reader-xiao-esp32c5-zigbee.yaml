@@ -1,13 +1,13 @@
-# MakerLink Reader: Seeed XIAO ESP32-C5 + PN532 (HSU) + 0,91" OLED 128x32 über ZIGBEE
+# MakerLink Reader: Seeed XIAO ESP32-C5 + PN532 (HSU) + LCD 16x2 und/oder OLED 128x32 über ZIGBEE
 # MACHBARKEITSSTUFE: Kartenscan, Relais, Sicherheitsschalter, BOOT-Taste, LED.
 # Display-Texte von der Integration und die Anbindung an MakerLink folgen
 # (ZHA-Quirk + Integrations-Adapter), siehe docs/PLAN.md.
 # Details zur Hardware: common/esp32c5-xiao-pn532-zigbee.yaml
 
 substitutions:
-  devicename: makerlink-reader-xiaoc5
+  devicename: makerlink-xiaoc5
   friendly_name: MakerLink Reader XIAO ESP32-C5
 
 packages:
   hardware: !include common/esp32c5-xiao-pn532-zigbee.yaml
-  display: !include common/display-ssd1306-128x32.yaml
+  display: !include common/display-dual.yaml

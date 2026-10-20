@@ -25,7 +25,8 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
+      key: !secret api_encryption_key
 
 wifi:
   # Zwei Netze: das erste hat Vorrang, das zweite ist der Fallback.

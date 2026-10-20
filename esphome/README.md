@@ -12,22 +12,27 @@ Ist Home Assistant nicht verbunden, zeigt das Display „HA offline“.
 
 | Datei | Hardware |
 |---|---|
-| `makerlink-reader-esp32s3-pn532.yaml` | ESP32-S3 Super Mini + PN532 (HSU) + **LCD 16x2** (PCF8574) |
-| `makerlink-reader-esp32s3-pn532-oled.yaml` | ESP32-S3 Super Mini + PN532 (HSU) + **0,91" OLED 128x32** (SSD1306, I2C) |
-| `makerlink-reader-xiao-esp32s3-pn532-oled.yaml` | Seeed XIAO ESP32-S3 + PN532 (HSU) + OLED 128x32 |
-| `makerlink-reader-xiao-esp32c5-pn532-oled-zigbee.yaml` | Seeed XIAO ESP32-C5 + PN532 (HSU) + OLED 128x32 über **Zigbee**, Machbarkeitsstufe, siehe unten |
-| `makerlink-reader-esp8266-rc522.yaml` | Bestands-Reader: D1 Mini + RC522 (SPI) + LCD 16x2 |
+| `makerlink-reader-esp32s3.yaml` | ESP32-S3 **Super Mini oder XIAO** (Substitution `board: supermini \| xiao`) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
+| `makerlink-reader-xiao-esp32c5-zigbee.yaml` | Seeed XIAO ESP32-C5 + PN532 (HSU) + LCD und/oder OLED über **Zigbee**, Machbarkeitsstufe, siehe unten |
+| `makerlink-reader-esp8266-rc522-lcd.yaml` | Bestands-Reader (30 Stück): D1 Mini + RC522 (SPI) + LCD 16x2. Hardware bleibt unverändert, wird nur neu geflasht |
 
 **Bausteine** in `common/`:
 
 | Datei | Inhalt |
 |---|---|
 | `makerlink-reader-base.yaml` | API, WLAN, Karten-Event, Text-Entitäten für die 2 Displayzeilen |
-| `esp32s3-supermini-pn532-hsu.yaml` | ESP32-S3 Super Mini: Board, PN532 über HSU, Relais, 2 Sicherheitsschalter |
-| `esp32s3-xiao-pn532-hsu.yaml` | XIAO ESP32-S3: wie oben, XIAO-Pins |
-| `esp32c5-xiao-pn532-zigbee.yaml` | XIAO ESP32-C5 **mit Zigbee statt WLAN**: ersetzt auch die Basis, plus BOOT-Taste und LED |
-| `display-lcd1602.yaml` | LCD 16x2 (Adresse `display_i2c_address`, Standard 0x27) |
-| `display-ssd1306-128x32.yaml` | OLED 128x32 (Adresse `oled_i2c_address`, Standard 0x3C), Roboto Mono 12 px, 2×16 Zeichen |
+| `esp32s3-pn532-hsu.yaml` | ESP32-S3: Board (Super Mini oder XIAO je nach `board`), PN532 über HSU, Relais, 2 Sicherheitsschalter, zwei I2C-Busse |
+| `esp32c5-xiao-pn532-zigbee.yaml` | XIAO ESP32-C5 **mit Zigbee statt WLAN**: ersetzt auch die Basis, plus BOOT-Taste und LED, ein I2C-Bus |
+| `display-dual.yaml` | LCD 16x2 (Adresse `display_i2c_address`, Standard 0x27) **und** OLED 128x32 (Adresse `oled_i2c_address`, Standard 0x3C, Roboto Mono 12 px, 2×16 Zeichen), beide immer einkompiliert |
+| `display-lcd1602.yaml` | Nur LCD, für den Bestands-Reader (D1 Mini) |
+
+## LCD und OLED ohne Neu-Flashen
+Beide Treiber stecken in jeder neuen Firmware. Es zeigt, was angeschlossen ist; ein fehlendes Display bleibt dunkel (und schreibt eventuell Warnungen ins Log). Ein Wechsel LCD ↔ OLED braucht kein Flashen.
+
+**Zwei getrennte I2C-Busse** (ESP32-S3), weil das LCD-Backpack mit **5 V** läuft und das OLED mit **3,3 V**, und weil das LCD höchstens 100 kHz verträgt (hier 50 kHz), das OLED aber 400 kHz bekommt:
+- **OLED-Bus:** direkt an den ESP, 3,3 V.
+- **LCD-Bus:** das Backpack bekommt 5 V. Dazwischen gehört ein bidirektionaler **Pegelwandler (BSS138-Modul)** für SDA/SCL, sonst liegen 5 V (Pull-ups des Backpacks) an den ESP-Pins, und der PCF8574 erkennt 3,3-V-High nicht sicher.
+- **ESP32-C5:** hat nur **einen** Hardware-I2C-Bus. OLED und LCD teilen sich ihn mit 100 kHz. Das LCD hängt hinter dem Pegelwandler, das OLED direkt auf der 3,3-V-Seite.
 
 PN532-Treiber (in `makerlink/`):
 - `pn532_hsu.h`: unverändert aus der bestehenden Firmware. Nutzt `HardwareSerial` und braucht daher das Arduino-Framework.
@@ -44,7 +49,8 @@ Der Reader fragt den PN532 jede Sekunde ab und meldet eine Karte **einmal pro Au
 | Funktion | Pin |
 |---|---|
 | PN532 HSU RX / TX | GPIO4 / GPIO5 |
-| I2C SDA / SCL (LCD 50 kHz, OLED 400 kHz) | GPIO8 / GPIO9 |
+| OLED-Bus SDA / SCL (3,3 V, 400 kHz) | GPIO8 / GPIO9 |
+| LCD-Bus SDA / SCL (50 kHz, über Pegelwandler) | GPIO12 / GPIO13 |
 | Relais | GPIO6 |
 | Sicherheitsschalter 1 / 2 | GPIO10 / GPIO11 |
 
@@ -54,8 +60,10 @@ Gleiche D-Pins auf beiden Boards, nur die GPIO-Nummern unterscheiden sich:
 | XIAO-Pin | Funktion | ESP32-S3 | ESP32-C5 |
 |---|---|---|---|
 | D1 | Relais (Seeed Relay Add-on for XIAO) | GPIO2 | GPIO0 |
-| D4 / SDA | Display SDA | GPIO5 | GPIO23 |
-| D5 / SCL | Display SCL | GPIO6 | GPIO24 |
+| D4 / SDA | OLED SDA (beim C5 auch LCD, 100 kHz) | GPIO5 | GPIO23 |
+| D5 / SCL | OLED SCL (beim C5 auch LCD) | GPIO6 | GPIO24 |
+| D0 | LCD SDA (nur S3, über Pegelwandler) | GPIO1 | – |
+| D10 | LCD SCL (nur S3, über Pegelwandler) | GPIO9 | – |
 | D6 / TX | ESP TX → PN532 RX | GPIO43 | GPIO11 |
 | D7 / RX | ESP RX ← PN532 TX | GPIO44 | GPIO12 |
 | D8 | Sicherheitsschalter 1 | GPIO7 | GPIO8 |
@@ -63,7 +71,7 @@ Gleiche D-Pins auf beiden Boards, nur die GPIO-Nummern unterscheiden sich:
 | BOOT (onboard) | > 5 s: Zigbee zurücksetzen und koppeln | – | GPIO28 |
 | User-LED (onboard) | zeigt den Relais-Zustand | – | GPIO27 (active low) |
 
-D0, D10 und die Strapping-Pins D2/D3 bleiben frei. Achtung: D1 ist beim S3 GPIO2, beim C5 GPIO0. GPIO0 ist beim S3 der BOOT-Pin. Das Log läuft über USB (`USB_SERIAL_JTAG`), deshalb ist der Standard-UART an D6/D7 frei für den PN532.
+Die Strapping-Pins D2/D3 bleiben frei. Beim C5 sind D0/D10 ebenfalls frei (der LCD hängt am gemeinsamen Bus). Achtung: D1 ist beim S3 GPIO2, beim C5 GPIO0. GPIO0 ist beim S3 der BOOT-Pin. Das Log läuft über USB (`USB_SERIAL_JTAG`), deshalb ist der Standard-UART an D6/D7 frei für den PN532.
 
 ## XIAO ESP32-C5 über Zigbee (Machbarkeitsstufe)
 Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Updates gehen nur per USB. Die Zigbee-Anbindung übernimmt die externe Komponente [luar123/zigbee_esphome](https://github.com/luar123/zigbee_esphome), festgelegt auf einen geprüften Commit. Die native ESPHome-Zigbee-Komponente kann auf ESP32 keine Switches und keine Texte. Die Zigbee-Komponente verlangt ESP-IDF, deshalb nutzt diese Variante `pn532_uart.h`.
@@ -88,7 +96,7 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
    /config/esphome/
      secrets.yaml
      maker9998.yaml                         ← deine Geräte-YAML
-     makerlink-reader-esp32s3-pn532.yaml    ← Gerätevarianten aus dem Repo
+     makerlink-reader-esp32s3.yaml          ← Gerätevarianten aus dem Repo
      makerlink-reader-xiao-…yaml
      common/                                ← Bausteine
      makerlink/
@@ -100,14 +108,14 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
    substitutions:
      devicename: maker9998
      friendly_name: Reader Demo
+     board: xiao                   # xiao | supermini
      # display_i2c_address: "0x3F"   # LCD, Standard 0x27
      # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
    packages:
-     reader: !include makerlink-reader-esp32s3-pn532.yaml         # LCD
-     # reader: !include makerlink-reader-esp32s3-pn532-oled.yaml  # OLED
+     reader: !include makerlink-reader-esp32s3.yaml
    ```
-   Die OLED-Variante lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
-3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz), `api_encryption_key` (`openssl rand -base64 32`) und `ota_password`. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.
+   Die Firmware enthält das OLED und lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
+3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz), `api_encryption_key` (`openssl rand -base64 32`). Der API-Schlüssel gilt auch für OTA-Uploads. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.
 4. Den Reader flashen und in HA über die ESPHome-Integration hinzufügen.
 5. In der MakerLink-Integration unter **Maschine oder Tür hinzufügen** das Reader-Gerät, die Text-Entitäten, das Schaltziel (Relais oder Steckdose) und die Sicherheitsschalter auswählen.
 

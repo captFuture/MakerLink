@@ -54,7 +54,7 @@ Derzeit keine.
 | Rolle | HA-Mechanismus | Pflicht |
 |---|---|---|
 | Karten-Scan | Event `esphome.makerlink_tag` (`uid`, `device_id`) **oder** Standard-Event `tag_scanned` mit `device_id`. Die UID kommt roh, die Integration wandelt ins MARS-Format um. | ja |
-| Display Zeile 1/2 | 2× `text`-Entity (16 Zeichen). Referenz-Firmware: LCD 16x2 oder OLED 128x32 (SSD1306) | nein |
+| Display Zeile 1/2 | 2× `text`-Entity (16 Zeichen). Referenz-Firmware: LCD 16x2 und OLED 128x32 (SSD1306) gleichzeitig einkompiliert, getrennte I2C-Busse (beim C5 ein gemeinsamer) | nein |
 | Schaltziel | `switch`-Entity (Reader-Relais **oder** externe Steckdose) | ja |
 | Mikroschalter 1/2 | `binary_sensor` (HA-Konvention: `on` = offen) | nein |
 | Offline-Fähigkeit | ESPHome-Actions `makerlink_sync_cards`, `makerlink_heartbeat`, Event `esphome.makerlink_offline_session` | nein (nur MakerLink-Firmware) |

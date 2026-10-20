@@ -5,7 +5,7 @@
 # ESPHome-API, keine OTA. Firmware-Updates nur per USB.
 #
 # XIAO-Belegung (gleiche D-Pins wie die XIAO-ESP32-S3-Variante):
-#   D1 = Relais (Seeed Relay Add-on) | D4/D5 = I2C (Display) | D6/D7 = PN532 HSU | D8/D9 = Schalter
+#   D1 = Relais (Seeed Relay Add-on) | D4/D5 = I2C (OLED + LCD) | D6/D7 = PN532 HSU | D8/D9 = Schalter
 #   BOOT (GPIO28): > 5 s halten = Zigbee zurücksetzen + neu koppeln (LED blinkt)
 #   User-LED (GPIO27): zeigt den Relais-Zustand
 #
@@ -22,13 +22,15 @@ substitutions:
   p_relay:    GPIO0    # D1 (Seeed Relay Add-on for XIAO schaltet über D1)
   p_sda:      GPIO23   # D4 / SDA
   p_scl:      GPIO24   # D5 / SCL
+  # Für das Display-Paket: OLED und LCD teilen sich einen Bus (siehe i2c unten).
+  i2c_oled_id: i2c_main
+  i2c_lcd_id: i2c_main
   p_pn532_tx: GPIO11   # D6 / TX  (ESP TX → PN532 RX)
   p_pn532_rx: GPIO12   # D7 / RX  (ESP RX ← PN532 TX)
   p_input1:   GPIO8    # D8  Sicherheitsschalter 1
   p_input2:   GPIO9    # D9  Sicherheitsschalter 2
   p_boot:     GPIO28   # BOOT-Taster (onboard)
   p_led:      GPIO27   # User-LED (onboard, active low)
-  i2c_frequency: 400kHz
   # Für die Display-Pakete: Verbindung = Zigbee-Netz beigetreten.
   link_connected: "id(zb).is_connected()"
   link_offline_text: "Zigbee koppeln"
@@ -63,17 +65,21 @@ logger:
   level: DEBUG
   hardware_uart: USB_SERIAL_JTAG
 
+i2c:
+  # Der C5 hat nur EINEN Hardware-I2C-Bus (ESPHome kennt keinen Software-I2C auf ESP32):
+  # OLED und LCD teilen ihn mit 100 kHz (PCF8574 vertraegt max. 100 kHz). Das LCD (5 V)
+  # hängt über einen Pegelwandler (BSS138) am Bus, das OLED direkt auf der 3,3-V-Seite.
+  - id: i2c_main
+    sda: ${p_sda}
+    scl: ${p_scl}
+    scan: true
+    frequency: 100kHz
+
 uart:
   - id: pn532_uart
     tx_pin: ${p_pn532_tx}
     rx_pin: ${p_pn532_rx}
     baud_rate: 115200
-
-i2c:
-  sda: ${p_sda}
-  scl: ${p_scl}
-  scan: true
-  frequency: ${i2c_frequency}
 
 globals:
   - id: g_pn532_ready
