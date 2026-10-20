@@ -14,7 +14,7 @@ esphome:
   project:
     # Wird von der MakerLink-Integration für die Auto-Discovery erkannt.
     name: makeraustria.makerlink_reader
-    version: "0.3.1"
+    version: "0.4.0"
 
 logger:
 
@@ -28,8 +28,14 @@ ota:
     password: !secret ota_password
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  # Zwei Netze: das erste hat Vorrang, das zweite ist der Fallback.
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+      priority: 10
+    - ssid: !secret wifi_ssid1
+      password: !secret wifi_password1
+      priority: 0
   ap:
     ssid: "${devicename}-setup"
 

@@ -176,3 +176,18 @@ Kontext: Pinout `docs/layouts/esp32s3-xiao.png` beigelegt. Die beiden Kopien war
 > merke dir bei jedem git push die versionsnummer zu erhöhen, damit hacs das auch mitbekommt
 
 **Folge:** Als Regel in `CLAUDE.md` und im Memory festgehalten. Version jetzt 0.3.0 → **0.3.1** (Fixes: Relais-Pin XIAO, ESP8266 `reset_pin`, README-Struktur).
+
+## 2026-10-20 – Reader-Installation in der README
+> Bei Installation in der Readme gehört ein Block der Reader-Installation (wie definiert man die reader korrekt? welche yaml dateien (dateien generell) müssen manuell in welchen ordner kopiert werden. Wie funktionieren updates aus dem repo hier?
+
+**Ergebnis:** README hat jetzt den Abschnitt „Installation der Reader (ESPHome)“ (Dateien nach `/config/esphome/`, `secrets.yaml`, Geräte-YAML, Flashen, Verknüpfung). „Updates“ trennt Integration (HACS) und Reader-Firmware (manuell kopieren, dann per OTA neu flashen; HACS fasst `/config/esphome/` nicht an).
+
+## 2026-10-20 – Zweites WLAN als Fallback
+> i want wifi_ssid and wifi_ssid1 to be configured - the second entry is the fallback
+
+**Ergebnis:** `common/makerlink-reader-base.yaml` nutzt `wifi: networks:` mit `wifi_ssid`/`wifi_password` (Priorität 10) und `wifi_ssid1`/`wifi_password1` (Priorität 0). Secrets in beiden READMEs ergänzt.
+
+## 2026-10-20 – Unit-ID pflegen, Standard 9999
+> wo wird die reader-id (unitid) gepflegt und verändert? Ein Reader soll nach dem onboarding standardmäßig die unitid 9999 haben, bis sie überschrieben wird (das ist die TEST-ID)
+
+**Ergebnis:** Die Unit-ID liegt in der Integration (Subentry pro Einheit, `unit_id`), nicht auf dem Reader. Vorher war sie Pflichtfeld ohne Vorgabe und nach dem Anlegen nicht änderbar. Jetzt: Vorgabe 9999 (`TEST_UNIT_ID`), 9999 darf mehrfach vergeben werden (kein `unique_id`), und **Neu konfigurieren** zeigt erst Name + Unit-ID, dann die Hardware.

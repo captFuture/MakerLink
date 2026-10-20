@@ -42,6 +42,7 @@ from .const import (
     KINDS,
     MACHINE_TYPES,
     SUBENTRY_UNIT,
+    TEST_UNIT_ID,
 )
 from .mars_format import MarsAuthError, MarsError
 
@@ -130,6 +131,11 @@ def _entity(domain: str | list[str]) -> selector.EntitySelector:
     return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
 
 
+def _unit_unique_id(unit_id: int) -> str | None:
+    """The test ID may be shared, so it gets no unique ID."""
+    return None if unit_id == TEST_UNIT_ID else f"unit_{unit_id}"
+
+
 def _number(
     min_v: float, max_v: float, step: float, unit: str | None = None
 ) -> selector.NumberSelector:
@@ -167,12 +173,39 @@ class UnitSubentryFlow(ConfigSubentryFlow):
                 vol.Required(CONF_KIND, default=KIND_MACHINE): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=KINDS, translation_key="kind")
                 ),
-                vol.Required(CONF_UNIT_ID): _number(1, 99999, 1),
+                vol.Required(CONF_UNIT_ID, default=TEST_UNIT_ID): _number(1, 99999, 1),
             }
         )
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(schema, user_input),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Rename a unit or change its unit ID, then continue with the hardware."""
+        subentry = self._get_reconfigure_subentry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            user_input[CONF_UNIT_ID] = int(user_input[CONF_UNIT_ID])
+            if self._unit_id_taken(user_input[CONF_UNIT_ID]):
+                errors[CONF_UNIT_ID] = "unit_exists"
+            else:
+                self._data = {**subentry.data, **user_input}
+                return await self.async_step_hardware()
+
+        schema = vol.Schema(
+            {
+                vol.Required("name"): str,
+                vol.Required(CONF_UNIT_ID): _number(1, 99999, 1),
+            }
+        )
+        suggested = user_input or {"name": subentry.title, CONF_UNIT_ID: subentry.data[CONF_UNIT_ID]}
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),
             errors=errors,
         )
 
@@ -192,11 +225,15 @@ class UnitSubentryFlow(ConfigSubentryFlow):
                 errors[CONF_READER_DEVICE] = "reader_in_use"
             elif is_reconfigure:
                 return self.async_update_and_abort(
-                    self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
+                    self._get_entry(),
+                    self._get_reconfigure_subentry(),
+                    unique_id=_unit_unique_id(data[CONF_UNIT_ID]),
+                    title=title,
+                    data=data,
                 )
             else:
                 return self.async_create_entry(
-                    title=title, data=data, unique_id=f"unit_{data[CONF_UNIT_ID]}"
+                    title=title, data=data, unique_id=_unit_unique_id(data[CONF_UNIT_ID])
                 )
 
         kind = self._data[CONF_KIND]
@@ -232,13 +269,6 @@ class UnitSubentryFlow(ConfigSubentryFlow):
             description_placeholders={"name": self._data.get("name", "")},
         )
 
-    async def async_step_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        subentry = self._get_reconfigure_subentry()
-        self._data = {**subentry.data, "name": subentry.title}
-        return await self.async_step_hardware()
-
     # ----- helpers -----------------------------------------------------------------
 
     def _others(self):
@@ -254,6 +284,8 @@ class UnitSubentryFlow(ConfigSubentryFlow):
         ]
 
     def _unit_id_taken(self, unit_id: int) -> bool:
+        if unit_id == TEST_UNIT_ID:
+            return False
         return any(int(s.data[CONF_UNIT_ID]) == unit_id for s in self._others())
 
     def _reader_taken(self, device_id: str) -> bool:

@@ -107,7 +107,7 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
      # reader: !include makerlink-reader-esp32s3-pn532-oled.yaml  # OLED
    ```
    Die OLED-Variante lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
-3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password`, `api_encryption_key` (`openssl rand -base64 32`) und `ota_password`. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.
+3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz), `api_encryption_key` (`openssl rand -base64 32`) und `ota_password`. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.
 4. Den Reader flashen und in HA über die ESPHome-Integration hinzufügen.
 5. In der MakerLink-Integration unter **Maschine oder Tür hinzufügen** das Reader-Gerät, die Text-Entitäten, das Schaltziel (Relais oder Steckdose) und die Sicherheitsschalter auswählen.
 

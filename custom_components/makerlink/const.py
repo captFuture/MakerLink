@@ -13,6 +13,8 @@ CONF_VERIFY_SSL = "verify_ssl"
 SUBENTRY_UNIT = "unit"
 CONF_KIND = "kind"
 CONF_UNIT_ID = "unit_id"
+# Default for a freshly onboarded reader; may be used by any number of units.
+TEST_UNIT_ID = 9999
 CONF_MACHINE_TYPE = "machine_type"
 CONF_READER_DEVICE = "reader_device"
 CONF_DISPLAY_LINE1 = "display_line1"

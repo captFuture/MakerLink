@@ -47,7 +47,17 @@
             "unit_id": "Unit-ID"
           },
           "data_description": {
-            "unit_id": "Reader-ID in MARS (schulung.reader_id), z. B. 1720. Die Eingangstür ist 1."
+            "unit_id": "Reader-ID in MARS (schulung.reader_id), z. B. 1720. Die Eingangstür ist 1. 9999 ist die Test-ID und darf mehrfach vergeben werden."
+          }
+        },
+        "reconfigure": {
+          "title": "Unit-ID und Name",
+          "data": {
+            "name": "Name",
+            "unit_id": "Unit-ID"
+          },
+          "data_description": {
+            "unit_id": "Reader-ID in MARS (schulung.reader_id). Neue Reader starten mit der Test-ID 9999."
           }
         },
         "hardware": {
