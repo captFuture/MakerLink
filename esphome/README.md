@@ -12,7 +12,8 @@ Ist Home Assistant nicht verbunden, zeigt das Display „HA offline“.
 
 | Datei | Hardware |
 |---|---|
-| `makerlink-reader-esp32s3.yaml` | ESP32-S3 **Super Mini oder XIAO** (Substitution `board: supermini \| xiao`) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
+| `makerlink-reader-esp32s3-supermini.yaml` | ESP32-S3 **Super Mini** (4 MB Flash) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
+| `makerlink-reader-esp32s3-xiao.yaml` | **XIAO ESP32-S3** (8 MB Flash) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
 | `makerlink-reader-xiao-esp32c5-zigbee.yaml` | Seeed XIAO ESP32-C5 + PN532 (HSU) + LCD und/oder OLED über **Zigbee**, Machbarkeitsstufe, siehe unten |
 | `makerlink-reader-esp8266-rc522-lcd.yaml` | Bestands-Reader (30 Stück): D1 Mini + RC522 (SPI) + LCD 16x2. Hardware bleibt unverändert, wird nur neu geflasht |
 
@@ -21,7 +22,8 @@ Ist Home Assistant nicht verbunden, zeigt das Display „HA offline“.
 | Datei | Inhalt |
 |---|---|
 | `makerlink-reader-base.yaml` | API, WLAN, Karten-Event, Text-Entitäten für die 2 Displayzeilen |
-| `esp32s3-pn532-hsu.yaml` | ESP32-S3: Board (Super Mini oder XIAO je nach `board`), PN532 über HSU, Relais, 2 Sicherheitsschalter, zwei I2C-Busse |
+| `esp32s3-supermini.yaml` / `esp32s3-xiao.yaml` | Board, Pins und Flash-Größe je ESP32-S3-Variante |
+| `esp32s3-pn532-hsu.yaml` | Gemeinsame ESP32-S3-Logik: PN532 über HSU, Relais, 2 Sicherheitsschalter, zwei I2C-Busse |
 | `esp32c5-xiao-pn532-zigbee.yaml` | XIAO ESP32-C5 **mit Zigbee statt WLAN**: ersetzt auch die Basis, plus BOOT-Taste und LED, ein I2C-Bus |
 | `display-dual.yaml` | LCD 16x2 (Adresse `display_i2c_address`, Standard 0x27) **und** OLED 128x32 (Adresse `oled_i2c_address`, Standard 0x3C, Roboto Mono 12 px, 2×16 Zeichen), beide immer einkompiliert |
 | `display-lcd1602.yaml` | Nur LCD, für den Bestands-Reader (D1 Mini) |
@@ -96,7 +98,7 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
    /config/esphome/
      secrets.yaml
      maker9998.yaml                         ← deine Geräte-YAML
-     makerlink-reader-esp32s3.yaml          ← Gerätevarianten aus dem Repo
+     makerlink-reader-esp32s3-xiao.yaml          ← Gerätevarianten aus dem Repo
      makerlink-reader-xiao-…yaml
      common/                                ← Bausteine
      makerlink/
@@ -108,11 +110,10 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
    substitutions:
      devicename: maker9998
      friendly_name: Reader Demo
-     board: xiao                   # xiao | supermini
      # display_i2c_address: "0x3F"   # LCD, Standard 0x27
      # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
    packages:
-     reader: !include makerlink-reader-esp32s3.yaml
+     reader: !include makerlink-reader-esp32s3-xiao.yaml
    ```
    Die Firmware enthält das OLED und lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
 3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz), `api_encryption_key` (`openssl rand -base64 32`). Der API-Schlüssel gilt auch für OTA-Uploads. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.

@@ -212,4 +212,11 @@ Kontext: Pinout `docs/layouts/esp32s3-xiao.png` beigelegt. Die beiden Kopien war
 > Der wemos bleibt so (ich kann nichts umbauen) - die bestehenden reader muss ich sowieso manuell per usb flashen und dann onboarden.
 > Behalte supermini xiao s3 und c5 Beide displays
 
-**Ergebnis:** Drei Geräte-YAMLs statt fünf: `makerlink-reader-esp32s3.yaml` (Super Mini oder XIAO per `board`), `makerlink-reader-xiao-esp32c5-zigbee.yaml`, `makerlink-reader-esp8266-rc522-lcd.yaml` (unverändert). `common/display-dual.yaml` enthält LCD und OLED, `common/esp32s3-pn532-hsu.yaml` ersetzt die zwei S3-Hardwarepakete (Jinja-Substitutions je nach `board`). S3: zwei getrennte I2C-Busse (OLED 400 kHz, LCD 50 kHz hinter Pegelwandler). C5: nur ein Hardware-I2C-Bus, deshalb ein gemeinsamer Bus mit 100 kHz.
+**Ergebnis:** Drei Geräte-YAMLs statt fünf: `makerlink-reader-esp32s3.yaml` (Super Mini oder XIAO per `board`, später in zwei Dateien geteilt, siehe unten), `makerlink-reader-xiao-esp32c5-zigbee.yaml`, `makerlink-reader-esp8266-rc522-lcd.yaml` (unverändert). `common/display-dual.yaml` enthält LCD und OLED, `common/esp32s3-pn532-hsu.yaml` ersetzt die zwei S3-Hardwarepakete (Jinja-Substitutions je nach `board`). S3: zwei getrennte I2C-Busse (OLED 400 kHz, LCD 50 kHz hinter Pegelwandler). C5: nur ein Hardware-I2C-Bus, deshalb ein gemeinsamer Bus mit 100 kHz.
+
+## 2026-10-20 – S3-Varianten getrennt, Bootloop-Fix
+Kontext: Der User flashte die S3-Firmware und bekam einen Bootloop (`spi_flash: Detected size(4096k) smaller than the size in the binary image header(8192k)`, `octal_psram: PSRAM chip is not connected`). Standard `board: xiao` setzte 8 MB Flash und Octal-PSRAM, die Hardware hat 4 MB und kein PSRAM.
+
+> teile den supermini und den xiao s3 in 2 files auf (reduziert die probleme)
+
+**Ergebnis:** PSRAM entfernt (wird nicht genutzt). Zwei Geräte-YAMLs `makerlink-reader-esp32s3-supermini.yaml` (4 MB) und `makerlink-reader-esp32s3-xiao.yaml` (8 MB). Board, Pins und Flash-Größe in `common/esp32s3-supermini.yaml` bzw. `common/esp32s3-xiao.yaml`, die gemeinsame Logik bleibt in `common/esp32s3-pn532-hsu.yaml`. Die Substitution `board` entfällt.

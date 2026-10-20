@@ -1,0 +1,23 @@
+# Board: Seeed XIAO ESP32-S3 (8 MB Flash)
+# https://www.espboards.dev/esp32/xiao-esp32s3/ (Pinout: docs/layouts/esp32s3-xiao.png)
+# Gleiche D-Pins wie die XIAO-ESP32-C5-Variante:
+#   D1 = Relais | D4/D5 = OLED-I2C | D0/D10 = LCD-I2C | D6/D7 = PN532 HSU | D8/D9 = Schalter
+#   D2/D3 (Strapping) bleiben frei.
+#   D1 passt zum Seeed "Relay Add-on Module for XIAO" (wiki.seeedstudio.com/relay_add_on_module_for_xiao).
+
+substitutions:
+  p_relay:     GPIO2   # D1 (NICHT GPIO0 = BOOT-Pin)
+  p_oled_sda:  GPIO5   # D4
+  p_oled_scl:  GPIO6   # D5
+  p_lcd_sda:   GPIO1   # D0
+  p_lcd_scl:   GPIO9   # D10
+  p_pn532_rx:  "44"    # D7, HSU RX (ESP RX <- PN532 TX)
+  p_pn532_tx:  "43"    # D6, HSU TX (ESP TX -> PN532 RX)
+  p_input1:    GPIO7   # D8, Sicherheitsschalter 1 (zB Kiln-Tuer)
+  p_input2:    GPIO8   # D9, Sicherheitsschalter 2
+
+esp32:
+  board: seeed_xiao_esp32s3
+  framework:
+    type: arduino   # pn532_hsu.h nutzt HardwareSerial
+  flash_size: 8MB

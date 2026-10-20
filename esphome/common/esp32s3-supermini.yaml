@@ -1,0 +1,20 @@
+# Board: ESP32-S3 Super Mini (4 MB Flash, kein PSRAM noetig)
+# https://www.espboards.dev/esp32/esp32-s3-super-mini/ (Pinout: docs/layouts/esp32s3-supermini.png)
+# Pinbelegung wie die bestehende Platine (docs/legacy/maker-reader-hw-esp32s3.yaml).
+
+substitutions:
+  p_relay:     GPIO6
+  p_oled_sda:  GPIO8
+  p_oled_scl:  GPIO9
+  p_lcd_sda:   GPIO12
+  p_lcd_scl:   GPIO13
+  p_pn532_rx:  "4"     # HSU RX (ESP RX <- PN532 TX)
+  p_pn532_tx:  "5"     # HSU TX (ESP TX -> PN532 RX)
+  p_input1:    GPIO10  # Sicherheitsschalter 1 (zB Kiln-Tuer)
+  p_input2:    GPIO11  # Sicherheitsschalter 2
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino   # pn532_hsu.h nutzt HardwareSerial
+  flash_size: 4MB   # zu grosser Wert -> Bootloop (spi_flash: Detected size smaller)

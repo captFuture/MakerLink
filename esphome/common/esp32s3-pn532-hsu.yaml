@@ -1,14 +1,6 @@
-# Hardware: ESP32-S3 (Super Mini ODER Seeed XIAO) + PN532 (HSU/UART) + Relais + 2 Sicherheitsschalter
-# Super Mini: https://www.espboards.dev/esp32/esp32-s3-super-mini/ (Pinout: docs/layouts/esp32s3-supermini.png)
-# XIAO:       https://www.espboards.dev/esp32/xiao-esp32s3/ (Pinout: docs/layouts/esp32s3-xiao.png)
-# Das Board wählt die Substitution `board` (xiao | supermini) im Geräte-YAML.
+﻿# Gemeinsame Logik der ESP32-S3-Reader: PN532 (HSU/UART), Relais, 2 Sicherheitsschalter, zwei I2C-Busse.
+# Board, Pins und Flash kommen aus common/esp32s3-supermini.yaml bzw. common/esp32s3-xiao.yaml.
 # Die Displays kommen aus common/display-dual.yaml (LCD + OLED auf getrennten I2C-Bussen).
-#
-# Super Mini: Pinbelegung wie die bestehende Platine (docs/legacy/maker-reader-hw-esp32s3.yaml).
-# XIAO (gleiche D-Pins wie die XIAO-ESP32-C5-Variante):
-#   D1 = Relais | D4/D5 = OLED-I2C | D0/D10 = LCD-I2C | D6/D7 = PN532 HSU | D8/D9 = Schalter
-#   D2/D3 (Strapping) bleiben frei.
-#   D1 passt zum Seeed "Relay Add-on Module for XIAO" (wiki.seeedstudio.com/relay_add_on_module_for_xiao).
 #
 # Der PN532 läuft über HSU (UART), NICHT über I2C: Der ESP32 kommt mit dem
 # Clock-Stretching des PN532 nicht zurecht. ESPHome hat keine eigene
@@ -16,19 +8,6 @@
 # PN532-Modul auf HSU stellen: Schalter/Jumper I0 = 0, I1 = 0.
 
 substitutions:
-  board: xiao   # xiao | supermini
-  esp_board:   ${ 'seeed_xiao_esp32s3' if board == 'xiao' else 'esp32-s3-devkitc-1' }
-  flash_size:  ${ '8MB' if board == 'xiao' else '4MB' }
-  psram_mode:  ${ 'octal' if board == 'xiao' else 'quad' }
-  p_relay:     ${ 'GPIO2' if board == 'xiao' else 'GPIO6' }    # XIAO: D1 (NICHT GPIO0 = BOOT-Pin)
-  p_oled_sda:  ${ 'GPIO5' if board == 'xiao' else 'GPIO8' }    # XIAO: D4
-  p_oled_scl:  ${ 'GPIO6' if board == 'xiao' else 'GPIO9' }    # XIAO: D5
-  p_lcd_sda:   ${ 'GPIO1' if board == 'xiao' else 'GPIO12' }   # XIAO: D0
-  p_lcd_scl:   ${ 'GPIO9' if board == 'xiao' else 'GPIO13' }   # XIAO: D10
-  p_pn532_rx:  ${ '44' if board == 'xiao' else '4' }           # HSU RX (ESP RX ← PN532 TX); XIAO: D7
-  p_pn532_tx:  ${ '43' if board == 'xiao' else '5' }           # HSU TX (ESP TX → PN532 RX); XIAO: D6
-  p_input1:    ${ 'GPIO7' if board == 'xiao' else 'GPIO10' }   # Sicherheitsschalter 1 (zB Kiln-Tür); XIAO: D8
-  p_input2:    ${ 'GPIO8' if board == 'xiao' else 'GPIO11' }   # Sicherheitsschalter 2; XIAO: D9
   i2c_oled_id: i2c_oled   # fuer common/display-dual.yaml
   i2c_lcd_id:  i2c_lcd
 
@@ -36,16 +15,6 @@ esphome:
   includes:
     # Pfad relativ zum ESPHome-Config-Ordner (siehe esphome/README.md).
     - makerlink/pn532_hsu.h
-
-esp32:
-  board: ${esp_board}
-  framework:
-    type: arduino   # pn532_hsu.h nutzt HardwareSerial
-  flash_size: ${flash_size}
-
-psram:
-  mode: ${psram_mode}
-  speed: 80MHz
 
 logger:
   level: DEBUG
