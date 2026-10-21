@@ -40,7 +40,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: makeraustria.makerlink_reader_zigbee
-    version: "0.4.0"
+    version: "0.4.1"
   includes:
     # Pfad relativ zum ESPHome-Config-Ordner (siehe esphome/README.md).
     - makerlink/pn532_uart.h
@@ -87,6 +87,13 @@ globals:
     initial_value: "false"
   - id: g_scan_counter
     type: uint8_t
+    initial_value: "0"
+  # Lokales Scan-Feedback (siehe common/display-*.yaml); hier endet es nach 4 s.
+  - id: g_scan_pending
+    type: bool
+    initial_value: "false"
+  - id: g_scan_ms
+    type: uint32_t
     initial_value: "0"
 
 # Display-Zeilen (lokal gesetzt; in der nächsten Stufe schreibt sie die Integration über Zigbee)
@@ -184,6 +191,8 @@ interval:
           std::string value = std::to_string(id(g_scan_counter)) + ":" + tag;
           ESP_LOGI("rfid", "Tag PN532='%s' -> Zigbee '%s'", tag.c_str(), value.c_str());
           id(card_scan).publish_state(value);
+          id(g_scan_ms) = millis();
+          id(g_scan_pending) = true;
 
 binary_sensor:
   - platform: template

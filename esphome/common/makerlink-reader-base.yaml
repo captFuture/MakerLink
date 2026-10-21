@@ -14,7 +14,7 @@ esphome:
   project:
     # Wird von der MakerLink-Integration für die Auto-Discovery erkannt.
     name: makeraustria.makerlink_reader
-    version: "0.4.0"
+    version: "0.4.1"
 
 logger:
 
@@ -42,12 +42,26 @@ wifi:
 
 captive_portal:
 
+globals:
+  # Lokales Scan-Feedback: Das Display zeigt sofort "Karte erkannt", bis neue Texte
+  # kommen (Integration) oder nach 4 s. Siehe common/display-*.yaml.
+  - id: g_scan_pending
+    type: bool
+    initial_value: "false"
+  - id: g_scan_ms
+    type: uint32_t
+    initial_value: "0"
+
 script:
   - id: card_scanned
     mode: single
     parameters:
       uid: string
     then:
+      # Sofort lokal anzeigen, dass die Karte gelesen wurde (Antwort aus HA folgt).
+      - lambda: |-
+          id(g_scan_ms) = millis();
+          id(g_scan_pending) = true;
       # Event statt tag_scanned: Mitgliedskarten landen nicht in der HA-Tag-Registry.
       - homeassistant.event:
           event: esphome.makerlink_tag
@@ -63,6 +77,9 @@ text:
     optimistic: true
     max_length: 16
     initial_value: "-MakerAustria-"
+    on_value:
+      # Neue Texte aus HA beenden das lokale Scan-Feedback.
+      - lambda: "id(g_scan_pending) = false;"
   - platform: template
     id: line2
     name: "Display Zeile 2"
@@ -70,6 +87,9 @@ text:
     optimistic: true
     max_length: 16
     initial_value: "Verbinde..."
+    on_value:
+      # Neue Texte aus HA beenden das lokale Scan-Feedback.
+      - lambda: "id(g_scan_pending) = false;"
 
 sensor:
   - platform: wifi_signal

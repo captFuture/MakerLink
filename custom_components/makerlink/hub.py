@@ -59,6 +59,8 @@ from .controller import DoorController, MachineController, UnitController
 _LOGGER = logging.getLogger(__name__)
 
 TICK = timedelta(seconds=1)
+# Minimum seconds between two display resends of one unit (no loop if a reader rejects a text).
+DISPLAY_RESEND_MIN = 2.0
 
 
 class HassHardware:
@@ -219,6 +221,32 @@ class MakerLinkHub:
         if hardware.interlocks:
             self._unsubs.append(
                 async_track_state_change_event(self.hass, hardware.interlocks, _interlock_changed)
+            )
+        display_entities = [e for e in hardware.lines if e]
+        if display_entities:
+            last_resend = 0.0
+
+            @callback
+            def _display_changed(event: Event[EventStateChangedData]) -> None:
+                # After a reboot/reconnect the reader shows its start text ("Verbinde...")
+                # while our desired lines are unchanged, so _refresh() would never resend.
+                nonlocal last_resend
+                new_state = event.data["new_state"]
+                desired = unit.display_lines
+                if (
+                    desired is None
+                    or new_state is None
+                    or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN)
+                ):
+                    return
+                index = hardware.lines.index(event.data["entity_id"])
+                now = self.hass.loop.time()
+                if new_state.state != desired[index] and now - last_resend >= DISPLAY_RESEND_MIN:
+                    last_resend = now
+                    self.hass.async_create_task(unit.resend_display())
+
+            self._unsubs.append(
+                async_track_state_change_event(self.hass, display_entities, _display_changed)
             )
         # Panel: power/interlock/reader availability are shown live as well.
         watched = {hardware.power_entity, *hardware.interlocks, *self._reader_entities[sub_id]}

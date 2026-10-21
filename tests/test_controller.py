@@ -319,3 +319,15 @@ async def test_queued_stop_already_booked_counts_as_done():
     api.stop_result = MarsResult(ok=True, msg="Bereits gestoppt")
     await ctrl.retry_pending()
     assert ctrl.pending_stops == []
+
+
+async def test_resend_display_after_reader_reboot():
+    """Reader rebooted with its start text: resend pushes the unchanged desired lines."""
+    ctrl, api, hw, _ = make_machine()
+    await ctrl.async_start()
+    assert hw.lines == ("-MakerAustria-", "Karte bitte")
+    hw.lines = ("-MakerAustria-", "Verbinde...")  # reader start text after reboot
+    await ctrl.tick()  # nothing changed from the controller's view: no push
+    assert hw.lines == ("-MakerAustria-", "Verbinde...")
+    await ctrl.resend_display()
+    assert hw.lines == ("-MakerAustria-", "Karte bitte")

@@ -220,3 +220,14 @@ Kontext: Der User flashte die S3-Firmware und bekam einen Bootloop (`spi_flash: 
 > teile den supermini und den xiao s3 in 2 files auf (reduziert die probleme)
 
 **Ergebnis:** PSRAM entfernt (wird nicht genutzt). Zwei Geräte-YAMLs `makerlink-reader-esp32s3-supermini.yaml` (4 MB) und `makerlink-reader-esp32s3-xiao.yaml` (8 MB). Board, Pins und Flash-Größe in `common/esp32s3-supermini.yaml` bzw. `common/esp32s3-xiao.yaml`, die gemeinsame Logik bleibt in `common/esp32s3-pn532-hsu.yaml`. Die Substitution `board` entfällt.
+
+## 2026-10-21 – „Verbinde...“ nach Neustart, kein Scan-Feedback
+> Bei einem neustart des readers wird in der zweiten zeile meist "verbinde..." angezeigt obwohl er schon verbunden ist. es gibt leider auch keine indikation, dass eine karte gerade gescannt wird und der user weiss nicht wie lange er die karte dranhalten sollte (das müssen wir beheben)
+
+**Ursache 1:** Die Firmware startet mit `Verbinde...` in Zeile 2. Die Integration schickt Displaytexte nur, wenn sich ihr Soll-Text ändert (`_refresh` vergleicht mit `_last_lines`). Nach einem Reader-Neustart im Ruhezustand ist der Soll-Text unverändert, also wurde nichts geschickt. Zeile 1 stimmt zufällig, weil Start- und Ruhetext gleich sind.
+
+**Fix 1 (Integration):** Ändert sich eine Display-Entität des Readers auf einen Wert ungleich dem Soll-Text (Reboot/Reconnect), sendet `UnitController.resend_display()` den aktuellen Text erneut. Höchstens alle 2 s pro Einheit, damit keine Schleife entsteht. Mit Test abgedeckt.
+
+**Fix 2 (Firmware):** Lokales Scan-Feedback. Sofort beim Lesen zeigt das Display „Karte erkannt / Bitte warten...“, bis neue Texte aus HA kommen, höchstens 4 s (Globals `g_scan_pending`/`g_scan_ms`, in allen Display-Paketen).
+
+Version 0.4.0 → **0.4.1**.

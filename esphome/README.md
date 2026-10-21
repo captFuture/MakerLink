@@ -47,6 +47,8 @@ ESPHome bietet für den PN532 nur SPI und I2C an, deshalb wird `pn532_hsu.h` per
 
 Der Reader fragt den PN532 jede Sekunde ab und meldet eine Karte **einmal pro Auflegen**. Bleibt die Karte liegen, folgt kein weiteres Event. Erst nach dem Abnehmen (2 leere Lesungen) wird sie wieder gemeldet. Die alte Firmware hat eine liegende Karte nach 5 s erneut gewertet und die Maschine dadurch wieder ausgeschaltet. Die Diagnose-Entität „PN532 bereit“ zeigt, ob der Leser initialisiert ist.
 
+**Scan-Feedback:** Sobald eine Karte gelesen ist, zeigt das Display sofort „Karte erkannt / Bitte warten...“. Das bleibt, bis die Integration neue Texte schickt (Prüfung, Ein/Aus, Ablehnung), höchstens 4 s. Der Benutzer sieht so, dass er die Karte abnehmen kann. Beim Zigbee-Reader endet es vorerst immer nach 4 s.
+
 ## Pinbelegung ESP32-S3 Super Mini
 | Funktion | Pin |
 |---|---|

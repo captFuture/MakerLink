@@ -1,6 +1,7 @@
 # Display: LCD 16x2 (HD44780) mit PCF8574-I2C-Backpack
 # Zeigt die zwei Text-Entitäten line1/line2. Erwartet die Substitutions
-# link_connected / link_offline_text (aus der Basis bzw. dem Zigbee-Hardware-Paket).
+# link_connected / link_offline_text (aus der Basis bzw. dem Zigbee-Hardware-Paket)
+# und die Globals g_scan_pending / g_scan_ms (Scan-Feedback "Karte erkannt").
 
 substitutions:
   display_i2c_address: "0x27"   # manche Backpacks: 0x3F
@@ -15,6 +16,11 @@ display:
       if (!(${link_connected})) {
         it.print(0, 0, "-MakerAustria-");
         it.print(0, 1, "${link_offline_text}");
+        return;
+      }
+      if (id(g_scan_pending) && millis() - id(g_scan_ms) < 4000) {
+        it.print(0, 0, "Karte erkannt");
+        it.print(0, 1, "Bitte warten...");
         return;
       }
       it.print(0, 0, id(line1).state.c_str());

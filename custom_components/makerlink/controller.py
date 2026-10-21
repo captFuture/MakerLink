@@ -241,6 +241,15 @@ class UnitController:
     def display_lines(self) -> tuple[str, str] | None:
         return self._last_lines
 
+    async def resend_display(self) -> None:
+        """Push the current lines again (reader rebooted/reconnected with its start text)."""
+        if self._last_lines is None:
+            return
+        try:
+            await self.hw.show(*self._last_lines)
+        except Exception:
+            _LOGGER.debug("%s: display resend failed", self.name, exc_info=True)
+
 
 class MachineController(UnitController):
     """Card on = power on + session start, card again = stop + billing + cooldown."""
