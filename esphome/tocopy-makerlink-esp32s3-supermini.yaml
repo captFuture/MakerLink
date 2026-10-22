@@ -6,6 +6,9 @@ substitutions:
   devicename: makerlink-s3-mini
   friendly_name: MakerLink Reader ESP32-S3 Super Mini
 
+esphome:
+  name: ${devicename}
+  
 packages:
   base: !include common/makerlink-reader-base.yaml
   board: !include common/esp32s3-supermini.yaml

@@ -8,6 +8,9 @@ substitutions:
   devicename: makerlink-xiaoc5
   friendly_name: MakerLink Reader XIAO ESP32-C5
 
+esphome:
+  name: ${devicename} 
+  
 packages:
   hardware: !include common/esp32c5-xiao-pn532-zigbee.yaml
   display: !include common/display-dual.yaml

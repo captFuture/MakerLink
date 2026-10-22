@@ -6,6 +6,9 @@ substitutions:
   devicename: makerlink-s3-xiao
   friendly_name: MakerLink Reader XIAO ESP32-S3
 
+esphome:
+  name: ${devicename}  
+
 packages:
   base: !include common/makerlink-reader-base.yaml
   board: !include common/esp32s3-xiao.yaml

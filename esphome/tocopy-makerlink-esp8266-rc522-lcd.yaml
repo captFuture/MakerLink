@@ -11,6 +11,9 @@ substitutions:
   p_rfid_rst: GPIO0
   p_rfid_ss: GPIO15
 
+esphome:
+  name: ${devicename}  
+
 packages:
   base: !include common/makerlink-reader-base.yaml
   display: !include common/display-lcd1602.yaml
