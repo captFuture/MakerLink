@@ -1,0 +1,16 @@
+# MakerLink Reader: ESP32-S3 Super Mini + PN532 (HSU) + LCD 16x2 und/oder OLED 128x32
+# Beide Displays sind einkompiliert (je ein eigener I2C-Bus), es steckt, was gebaut wurde.
+# Details zur Hardware: common/esp32s3-supermini.yaml, common/esp32s3-pn532-hsu.yaml, Displays: common/display-dual.yaml
+
+substitutions:
+  devicename: 9998-makerlink-tuer
+  friendly_name: 9998 DEMO MakerLink Tuer Supermini
+
+esphome:
+  name: ${devicename}  
+  
+packages:
+  base: !include common/makerlink-reader-base.yaml
+  board: !include common/esp32s3-supermini.yaml
+  hardware: !include common/esp32s3-pn532-hsu.yaml
+  display: !include common/display-dual.yaml

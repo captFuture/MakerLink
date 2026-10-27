@@ -5,9 +5,11 @@
 substitutions:
   devicename: makerlink-s3-xiao
   friendly_name: MakerLink Reader XIAO ESP32-S3
+  # display_i2c_address: "0x3F"   # LCD, Standard 0x27
+  # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
 
 esphome:
-  name: ${devicename}  
+  name: ${devicename}
 
 packages:
   base: !include common/makerlink-reader-base.yaml

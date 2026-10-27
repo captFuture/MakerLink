@@ -7,7 +7,7 @@ const TEXT = {
     title: "MakerLink",
     loading: "Lade Reader…",
     notConfigured: "MakerLink ist noch nicht eingerichtet. Einstellungen → Geräte & Dienste → Integration hinzufügen → MakerLink.",
-    noUnits: "Noch keine Maschinen oder Türen angelegt. In der MakerLink-Integration „Maschine oder Tür hinzufügen“ wählen.",
+    noUnits: "Noch keine Maschinen oder Türen angelegt.",
     error: "Fehler beim Laden",
     machine: "Maschine",
     door: "Tür",
@@ -42,6 +42,58 @@ const TEXT = {
     summaryOoo: "außer Betrieb",
     summaryOffline: "offline",
     summaryPending: "offene Buchungen",
+    addReader: "Reader hinzufügen",
+    newReaders: "Neue Reader",
+    newReadersHint: "Diese Reader sind in Home Assistant angemeldet, aber noch keiner Maschine oder Tür zugeordnet.",
+    adminOnly: "Ein Administrator muss die Reader einrichten.",
+    setup: "Einrichten",
+    identify: "Identifizieren",
+    identifyShown: "Der Reader zeigt jetzt „HIER BIN ICH“ (10 s).",
+    noRelay: "kein Relais gefunden",
+    noDisplay: "kein Display",
+    firmware: "Firmware",
+    pendingEsphome: "In ESPHome gefunden, aber noch nicht bestätigt: {names}. Dort bei „Gefundene Geräte“ auf „Hinzufügen“ klicken, dann erscheint der Reader hier.",
+    toEsphome: "Zu ESPHome ›",
+    edit: "Bearbeiten",
+    remove: "Entfernen",
+    confirmRemove: "{name} entfernen? Der Reader erscheint danach wieder unter „Neue Reader“.",
+    formAdd: "Reader einrichten",
+    formEdit: "Bearbeiten",
+    fName: "Name / Beschreibung",
+    fKind: "Funktion",
+    fUnit: "Unit-ID",
+    fUnitHint: "9999 ist die Test-ID und darf mehrfach vergeben werden.",
+    fType: "Abrechnung",
+    fPower: "Schaltziel",
+    fPowerAuto: "Relais am Reader",
+    fKindNote: "Beim Wechsel zwischen Maschine und Tür werden die Einstellungen der Einheit zurückgesetzt (Nachlauf, Mindestguthaben, …).",
+    save: "Speichern",
+    cancel: "Abbrechen",
+    close: "Schließen",
+    errors: {
+      unit_exists: "Diese Unit-ID ist schon vergeben.",
+      reader_in_use: "Dieser Reader gehört schon zu einer Einheit.",
+      no_power_target: "Dieser Reader hat kein Relais. Bitte ein Schaltziel wählen.",
+      unit_busy: "Die Einheit ist gerade in Benutzung (Session oder offene Buchung).",
+      invalid_devicename: "Nur Kleinbuchstaben, Ziffern und Bindestrich, höchstens 31 Zeichen.",
+      devicename_exists: "Dieser Gerätename existiert in ESPHome schon.",
+      invalid_unit_id: "Die Unit-ID muss zwischen 1 und 99999 liegen.",
+    },
+    prepTitle: "Neuen Reader vorbereiten",
+    prepSteps: [
+      "Hardware und Gerätename wählen und die YAML-Datei kopieren.",
+      "In ESPHome ein neues Gerät mit genau diesem Namen anlegen („Leere Konfiguration“), den Inhalt ersetzen und installieren. Das erste Mal per USB.",
+      "In Home Assistant bei der ESPHome-Integration das gefundene Gerät hinzufügen.",
+      "Der Reader erscheint dann hier unter „Neue Reader“. Dort Funktion (Maschine oder Tür), Name und Unit-ID festlegen.",
+    ],
+    prepOnce: "Einmalig vorab: Der Inhalt von esphome/ aus dem Repository liegt in /config/esphome/ und secrets.yaml ist ausgefüllt (siehe README).",
+    fHardware: "Hardware",
+    fDevicename: "Gerätename",
+    fFriendly: "Beschreibung (optional)",
+    copy: "Kopieren",
+    copied: "Kopiert",
+    download: "Herunterladen",
+    saveAs: "Dateiname",
     status: {
       idle: "Bereit",
       checking: "Prüfe",
@@ -59,7 +111,7 @@ const TEXT = {
     title: "MakerLink",
     loading: "Loading readers…",
     notConfigured: "MakerLink is not set up yet. Settings → Devices & services → Add integration → MakerLink.",
-    noUnits: "No machines or doors yet. Use “Add machine or door” in the MakerLink integration.",
+    noUnits: "No machines or doors yet.",
     error: "Error while loading",
     machine: "Machine",
     door: "Door",
@@ -94,6 +146,58 @@ const TEXT = {
     summaryOoo: "out of order",
     summaryOffline: "offline",
     summaryPending: "pending bookings",
+    addReader: "Add reader",
+    newReaders: "New readers",
+    newReadersHint: "These readers are registered in Home Assistant but not assigned to a machine or door yet.",
+    adminOnly: "An administrator has to set up the readers.",
+    setup: "Set up",
+    identify: "Identify",
+    identifyShown: "The reader now shows “HIER BIN ICH” (10 s).",
+    noRelay: "no relay found",
+    noDisplay: "no display",
+    firmware: "Firmware",
+    pendingEsphome: "Found in ESPHome but not confirmed yet: {names}. Click “Add” under “Discovered” there and the reader shows up here.",
+    toEsphome: "Go to ESPHome ›",
+    edit: "Edit",
+    remove: "Remove",
+    confirmRemove: "Remove {name}? The reader will show up under “New readers” again.",
+    formAdd: "Set up reader",
+    formEdit: "Edit",
+    fName: "Name / description",
+    fKind: "Function",
+    fUnit: "Unit ID",
+    fUnitHint: "9999 is the test ID and may be used several times.",
+    fType: "Billing",
+    fPower: "Switch target",
+    fPowerAuto: "Relay on the reader",
+    fKindNote: "Switching between machine and door resets the settings of the unit (cooldown, minimum balance, …).",
+    save: "Save",
+    cancel: "Cancel",
+    close: "Close",
+    errors: {
+      unit_exists: "This unit ID is already taken.",
+      reader_in_use: "This reader already belongs to a unit.",
+      no_power_target: "This reader has no relay. Please choose a switch target.",
+      unit_busy: "The unit is in use right now (session or pending booking).",
+      invalid_devicename: "Lowercase letters, digits and hyphen only, at most 31 characters.",
+      devicename_exists: "This device name already exists in ESPHome.",
+      invalid_unit_id: "The unit ID must be between 1 and 99999.",
+    },
+    prepTitle: "Prepare a new reader",
+    prepSteps: [
+      "Choose the hardware and a device name, then copy the YAML file.",
+      "In ESPHome create a new device with exactly that name (“Empty configuration”), replace its content and install. The first time over USB.",
+      "In Home Assistant add the discovered device in the ESPHome integration.",
+      "The reader then shows up here under “New readers”. Set function (machine or door), name and unit ID there.",
+    ],
+    prepOnce: "Once beforehand: the content of esphome/ from the repository is in /config/esphome/ and secrets.yaml is filled in (see README).",
+    fHardware: "Hardware",
+    fDevicename: "Device name",
+    fFriendly: "Description (optional)",
+    copy: "Copy",
+    copied: "Copied",
+    download: "Download",
+    saveAs: "File name",
     status: {
       idle: "Idle",
       checking: "Checking",
@@ -144,6 +248,9 @@ class MakerLinkPanel extends HTMLElement {
     this._error = null;
     this._unsub = null;
     this._busy = new Set();
+    this._readers = [];
+    this._esphomePending = [];
+    this._optionsCache = null;
   }
 
   // ----- properties set by Home Assistant -------------------------------------
@@ -169,6 +276,8 @@ class MakerLinkPanel extends HTMLElement {
 
   connectedCallback() {
     this._timer = setInterval(() => this._tickDurations(), 1000);
+    // New ESPHome discoveries have no registry event: look again from time to time.
+    this._poll = setInterval(() => this._refresh(), 5000);
     if (this._hass) {
       this._renderShell();
       this._subscribe();
@@ -177,6 +286,7 @@ class MakerLinkPanel extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    clearInterval(this._poll);
     if (this._unsub) {
       this._unsub.then((unsub) => unsub()).catch(() => {});
       this._unsub = null;
@@ -193,13 +303,7 @@ class MakerLinkPanel extends HTMLElement {
   _subscribe() {
     if (this._unsub || !this._hass || !this.isConnected) return;
     this._unsub = this._hass.connection.subscribeMessage(
-      (msg) => {
-        this._units = msg.units || [];
-        this._configured = msg.configured !== false;
-        this._loaded = true;
-        this._error = null;
-        this._render();
-      },
+      (msg) => this._apply(msg),
       { type: "makerlink/subscribe" }
     );
     this._unsub.catch((err) => {
@@ -207,6 +311,34 @@ class MakerLinkPanel extends HTMLElement {
       this._unsub = null;
       this._render();
     });
+  }
+
+  _apply(msg) {
+    const key = JSON.stringify(msg);
+    if (this._loaded && key === this._lastKey) return;
+    // While the config entry reloads after a save the unit list is briefly empty.
+    if (Date.now() < (this._holdUntil || 0) && !(msg.units || []).length && this._units.length) return;
+    this._lastKey = key;
+    this._units = msg.units || [];
+    this._readers = msg.readers || [];
+    this._esphomePending = msg.esphome_pending || [];
+    this._configured = msg.configured !== false;
+    this._loaded = true;
+    this._error = null;
+    this._render();
+  }
+
+  async _refresh() {
+    if (!this._hass || !this.isConnected || !this._loaded) return;
+    try {
+      this._apply(await this._hass.callWS({ type: "makerlink/units" }));
+    } catch (err) {
+      /* the subscription reports errors */
+    }
+  }
+
+  get _admin() {
+    return !!this._hass?.user?.is_admin;
   }
 
   async _action(unitId, action, value) {
@@ -236,9 +368,13 @@ class MakerLinkPanel extends HTMLElement {
       <div class="toolbar">
         <ha-menu-button></ha-menu-button>
         <div class="main-title">${esc(this._t.title)}</div>
+        <button class="toolbar-add" data-ui="prepare" hidden><ha-icon icon="mdi:plus"></ha-icon>${esc(this._t.addReader)}</button>
       </div>
-      <div class="content"></div>`;
+      <div class="content"></div>
+      <div class="overlay"></div>`;
+    this.shadowRoot.querySelector(".toolbar").addEventListener("click", (ev) => this._onClick(ev));
     this.shadowRoot.querySelector(".content").addEventListener("click", (ev) => this._onClick(ev));
+    this.shadowRoot.querySelector(".overlay").addEventListener("click", (ev) => this._onOverlayClick(ev));
     this._updateMenuButton();
   }
 
@@ -256,18 +392,63 @@ class MakerLinkPanel extends HTMLElement {
     const t = this._t;
     let html = "";
     if (this._error) html += `<div class="banner error">${esc(t.error)}: ${esc(this._error)}</div>`;
+    if (this._notice) html += `<div class="banner info">${esc(this._notice)}</div>`;
     if (!this._loaded) {
       html += `<div class="empty">${esc(t.loading)}</div>`;
     } else if (!this._configured) {
       html += `<div class="empty">${esc(t.notConfigured)}</div>`;
-    } else if (!this._units.length) {
-      html += `<div class="empty">${esc(t.noUnits)}</div>`;
     } else {
-      html += this._renderSummary();
-      html += `<div class="grid">${this._units.map((u) => this._renderUnit(u)).join("")}</div>`;
+      html += this._renderOnboarding();
+      if (this._units.length) {
+        html += this._renderSummary();
+        html += `<div class="grid">${this._units.map((u) => this._renderUnit(u)).join("")}</div>`;
+      } else if (!this._readers.length) {
+        html += `<div class="empty">${esc(t.noUnits)}${
+          this._admin ? `<div><button class="primary" data-ui="prepare">${esc(t.addReader)}</button></div>` : ""
+        }</div>`;
+      }
     }
+    const add = this.shadowRoot.querySelector(".toolbar-add");
+    if (add) add.hidden = !(this._admin && this._configured && this._loaded);
     content.innerHTML = html;
     this._tickDurations();
+  }
+
+  _renderOnboarding() {
+    const t = this._t;
+    let html = "";
+    if (this._esphomePending.length) {
+      html += `<div class="banner info">${esc(t.pendingEsphome.replace("{names}", this._esphomePending.join(", ")))}
+        <button data-nav="/config/integrations/integration/esphome">${esc(t.toEsphome)}</button></div>`;
+    }
+    if (this._readers.length) {
+      html += `<div class="section"><div class="section-title">${esc(t.newReaders)}</div>
+        <div class="hint">${esc(this._admin ? t.newReadersHint : t.adminOnly)}</div>
+        <div class="grid">${this._readers.map((r) => this._renderReader(r)).join("")}</div></div>`;
+    }
+    return html;
+  }
+
+  _renderReader(r) {
+    const t = this._t;
+    const notes = [];
+    if (r.firmware) notes.push(`${esc(t.firmware)} ${esc(r.firmware)}`);
+    if (!r.has_relay) notes.push(`<span class="bad">${esc(t.noRelay)}</span>`);
+    if (!r.has_display) notes.push(esc(t.noDisplay));
+    const actions = this._admin
+      ? `<button class="primary" data-ui="setup" data-reader="${esc(r.device_id)}">${esc(t.setup)}</button>
+         ${r.has_display && r.online ? `<button data-ui="identify" data-reader="${esc(r.device_id)}">${esc(t.identify)}</button>` : ""}`
+      : "";
+    const color = r.online ? "var(--success-color, #43a047)" : "var(--disabled-text-color, #9e9e9e)";
+    return `
+      <ha-card class="unit ${r.online ? "" : "offline"}">
+        <div class="head">
+          <ha-icon icon="mdi:card-account-details-outline"></ha-icon>
+          <div class="name"><div class="title">${esc(r.name)}</div><div class="sub">${notes.join(" · ")}</div></div>
+          <span class="badge" style="--badge:${color}">${esc(r.online ? t.online : t.offline)}</span>
+        </div>
+        <div class="actions">${actions}</div>
+      </ha-card>`;
   }
 
   _renderSummary() {
@@ -331,6 +512,9 @@ class MakerLinkPanel extends HTMLElement {
       actions.push(`<button class="primary" data-action="open_door" data-unit="${esc(u.id)}" ${busy("open_door")}>${esc(t.openDoor)}</button>`);
     }
     actions.push(this._toggle(u, "out_of_order", t.outOfOrder, u.out_of_order, false));
+    if (this._admin) {
+      actions.push(`<button class="ghost" data-ui="edit" data-unit="${esc(u.id)}">${esc(t.edit)}</button>`);
+    }
     if (u.device_id) {
       actions.push(`<button class="link" data-nav="/config/devices/device/${esc(u.device_id)}">${esc(t.device)} ›</button>`);
     }
@@ -369,7 +553,264 @@ class MakerLinkPanel extends HTMLElement {
     });
   }
 
+  // ----- onboarding: dialogs ----------------------------------------------------
+
+  _ui(d) {
+    if (d.ui === "prepare") this._openPrepare();
+    else if (d.ui === "setup") this._openUnitForm({ reader: this._readers.find((r) => r.device_id === d.reader) });
+    else if (d.ui === "edit") this._openUnitForm({ unit: this._units.find((u) => u.id === d.unit) });
+    else if (d.ui === "identify") this._identify(d.reader);
+  }
+
+  _fail(err) {
+    this._error = this._t.errors[err?.code] || err?.message || String(err);
+    this._render();
+  }
+
+  _showDialog(html) {
+    const overlay = this.shadowRoot.querySelector(".overlay");
+    overlay.innerHTML = `<dialog>${html}</dialog>`;
+    const dialog = overlay.querySelector("dialog");
+    dialog.addEventListener("close", () => {
+      overlay.innerHTML = "";
+    });
+    dialog.showModal();
+    return dialog;
+  }
+
+  _closeDialog() {
+    this.shadowRoot.querySelector(".overlay dialog")?.close();
+  }
+
+  _onOverlayClick(ev) {
+    const button = ev.target.closest("[data-dlg]");
+    if (!button || button.disabled) return;
+    const action = button.dataset.dlg;
+    if (action === "close") this._closeDialog();
+    else if (action === "copy") this._copyYaml(button);
+    else if (action === "download") this._downloadYaml();
+    else if (action === "remove") this._removeUnit();
+  }
+
+  async _identify(readerId) {
+    try {
+      await this._hass.callWS({ type: "makerlink/identify", reader_device: readerId });
+      this._notice = this._t.identifyShown;
+      this._render();
+      clearTimeout(this._noticeTimer);
+      this._noticeTimer = setTimeout(() => {
+        this._notice = null;
+        this._render();
+      }, 10000);
+    } catch (err) {
+      this._fail(err);
+    }
+  }
+
+  // Step 1 of a new reader: device YAML with a free name, ready to paste into ESPHome.
+  async _openPrepare() {
+    let opts;
+    try {
+      opts = await this._hass.callWS({ type: "makerlink/options" });
+    } catch (err) {
+      this._fail(err);
+      return;
+    }
+    const t = this._t;
+    this._yaml = null;
+    const dialog = this._showDialog(`
+      <h2>${esc(t.prepTitle)}</h2>
+      <ol class="steps">${t.prepSteps.map((text) => `<li>${esc(text)}</li>`).join("")}</ol>
+      <div class="hint">${esc(t.prepOnce)}</div>
+      <label>${esc(t.fHardware)}
+        <select name="hardware">${opts.hardware.map((h) => `<option value="${esc(h.id)}">${esc(h.label)}</option>`).join("")}</select>
+      </label>
+      <label>${esc(t.fDevicename)}
+        <input name="devicename" value="${esc(opts.suggested_devicename)}" autocomplete="off" spellcheck="false">
+      </label>
+      <label>${esc(t.fFriendly)}
+        <input name="friendly_name" autocomplete="off">
+      </label>
+      <div class="error" data-role="error"></div>
+      <div class="filename" data-role="filename"></div>
+      <textarea readonly rows="10" spellcheck="false" data-role="yaml"></textarea>
+      <div class="dlg-actions">
+        <button class="primary" data-dlg="copy" disabled>${esc(t.copy)}</button>
+        <button data-dlg="download" disabled>${esc(t.download)}</button>
+        <button data-dlg="close">${esc(t.close)}</button>
+      </div>`);
+    const q = (sel) => dialog.querySelector(sel);
+    let timer;
+    const generate = async () => {
+      const msg = {
+        type: "makerlink/reader_yaml",
+        hardware: q("[name=hardware]").value,
+        devicename: q("[name=devicename]").value.trim(),
+      };
+      const friendly = q("[name=friendly_name]").value.trim();
+      if (friendly) msg.friendly_name = friendly;
+      try {
+        this._yaml = await this._hass.callWS(msg);
+        q("[data-role=error]").textContent = "";
+        q("[data-role=filename]").textContent = `${t.saveAs}: ${this._yaml.filename}`;
+        q("[data-role=yaml]").value = this._yaml.yaml;
+      } catch (err) {
+        this._yaml = null;
+        q("[data-role=error]").textContent = t.errors[err?.code] || err?.message || String(err);
+        q("[data-role=filename]").textContent = "";
+        q("[data-role=yaml]").value = "";
+      }
+      dialog.querySelectorAll("[data-dlg=copy], [data-dlg=download]").forEach((b) => {
+        b.disabled = !this._yaml;
+      });
+    };
+    dialog.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(generate, 300);
+    });
+    dialog.addEventListener("change", generate);
+    generate();
+  }
+
+  async _copyYaml(button) {
+    const text = this._yaml?.yaml;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      // No clipboard API on plain http: select the text and use the old way.
+      const area = this.shadowRoot.querySelector("textarea[data-role=yaml]");
+      area.select();
+      document.execCommand("copy");
+    }
+    button.textContent = this._t.copied;
+    setTimeout(() => {
+      button.textContent = this._t.copy;
+    }, 1500);
+  }
+
+  _downloadYaml() {
+    if (!this._yaml) return;
+    const url = URL.createObjectURL(new Blob([this._yaml.yaml], { type: "text/yaml" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = this._yaml.filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Add (reader given) or edit (unit given): name, function, unit ID, optionally the switch target.
+  async _openUnitForm({ reader, unit }) {
+    if (!reader && !unit) return;
+    let opts;
+    try {
+      opts = await this._hass.callWS({ type: "makerlink/options" });
+    } catch (err) {
+      this._fail(err);
+      return;
+    }
+    const t = this._t;
+    const editing = !!unit;
+    this._editUnit = unit || null;
+    const kind = unit?.kind || "machine";
+    const power = unit?.power_entity || "";
+    const switches = [...opts.switches];
+    if (power && !switches.some((x) => x.entity_id === power)) switches.unshift({ entity_id: power, name: power });
+    const autoRelay = !editing && reader.has_relay;
+    const powerOptions =
+      `<option value="">${esc(autoRelay ? t.fPowerAuto : "–")}</option>` +
+      switches
+        .map(
+          (x) =>
+            `<option value="${esc(x.entity_id)}" ${x.entity_id === power ? "selected" : ""}>${esc(x.name)} (${esc(x.entity_id)})</option>`
+        )
+        .join("");
+    const radio = (value, label) =>
+      `<label class="radio"><input type="radio" name="kind" value="${value}" ${kind === value ? "checked" : ""}>${esc(label)}</label>`;
+    const dialog = this._showDialog(`
+      <h2>${esc(editing ? `${t.formEdit}: ${unit.name}` : `${t.formAdd}: ${reader.name}`)}</h2>
+      <form>
+        <label>${esc(t.fName)}
+          <input name="name" required maxlength="64" value="${esc(unit?.name || reader.name)}" autocomplete="off">
+        </label>
+        <fieldset><legend>${esc(t.fKind)}</legend>${radio("machine", t.machine)}${radio("door", t.door)}</fieldset>
+        <div class="hint" data-role="kindnote" hidden>${esc(t.fKindNote)}</div>
+        <label>${esc(t.fUnit)}
+          <input name="unit_id" type="number" min="1" max="99999" step="1" required value="${esc(unit ? unit.unit_id : opts.test_unit_id)}">
+          <span class="hint">${esc(t.fUnitHint)}</span>
+        </label>
+        <label data-for="machine">${esc(t.fType)}
+          <select name="machine_type">${opts.machine_types
+            .map((m) => `<option value="${esc(m)}" ${m === (unit?.machine_type || "machine") ? "selected" : ""}>${esc(t.types[m] || m)}</option>`)
+            .join("")}</select>
+        </label>
+        <label>${esc(t.fPower)}
+          <select name="power_entity" ${autoRelay || editing ? "" : "required"}>${powerOptions}</select>
+        </label>
+        <div class="error" data-role="error"></div>
+        <div class="dlg-actions">
+          <button class="primary" type="submit">${esc(t.save)}</button>
+          <button type="button" data-dlg="close">${esc(t.cancel)}</button>
+          ${editing ? `<button type="button" class="danger" data-dlg="remove">${esc(t.remove)}</button>` : ""}
+        </div>
+      </form>`);
+    const form = dialog.querySelector("form");
+    const sync = () => {
+      const value = form.elements.kind.value;
+      dialog.querySelectorAll("[data-for]").forEach((el) => {
+        el.hidden = el.dataset.for !== value;
+      });
+      dialog.querySelector("[data-role=kindnote]").hidden = !(editing && value !== kind);
+    };
+    form.addEventListener("change", sync);
+    sync();
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const data = new FormData(form);
+      const msg = {
+        type: editing ? "makerlink/unit_update" : "makerlink/unit_add",
+        name: String(data.get("name")).trim(),
+        kind: data.get("kind"),
+        unit_id: Number(data.get("unit_id")),
+      };
+      if (editing) msg.unit = unit.id;
+      else msg.reader_device = reader.device_id;
+      if (msg.kind === "machine") msg.machine_type = data.get("machine_type");
+      if (data.get("power_entity")) msg.power_entity = data.get("power_entity");
+      const save = form.querySelector("[type=submit]");
+      save.disabled = true;
+      try {
+        await this._hass.callWS(msg);
+        this._holdUntil = Date.now() + 4000;
+        this._closeDialog();
+        this._refresh();
+      } catch (err) {
+        dialog.querySelector("[data-role=error]").textContent = t.errors[err?.code] || err?.message || String(err);
+        save.disabled = false;
+      }
+    });
+  }
+
+  async _removeUnit() {
+    const unit = this._editUnit;
+    if (!unit || !window.confirm(this._t.confirmRemove.replace("{name}", unit.name))) return;
+    try {
+      await this._hass.callWS({ type: "makerlink/unit_remove", unit: unit.id });
+      this._holdUntil = Date.now() + 4000;
+      this._closeDialog();
+      this._refresh();
+    } catch (err) {
+      this._closeDialog();
+      this._fail(err);
+    }
+  }
+
   _onClick(ev) {
+    const ui = ev.target.closest("[data-ui]");
+    if (ui) {
+      this._ui(ui.dataset);
+      return;
+    }
     const nav = ev.target.closest("[data-nav]");
     if (nav) {
       history.pushState(null, "", nav.dataset.nav);
@@ -460,6 +901,44 @@ const STYLE = `
   button.toggle ha-icon { --mdc-icon-size: 20px; color: var(--secondary-text-color); }
   button.toggle.on ha-icon { color: var(--primary-color); }
   button.link { border-color: transparent; color: var(--primary-color); margin-left: auto; }
+  .banner.info {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 12px 16px; margin-bottom: 16px; border-radius: 8px;
+    background: color-mix(in srgb, var(--info-color, #039be5) 14%, transparent);
+  }
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 18px; font-weight: 500; }
+  .hint { font-size: 13px; color: var(--secondary-text-color); margin: 2px 0 8px; }
+  button.ghost { border-color: transparent; color: var(--secondary-text-color); }
+  button.danger { color: var(--error-color, #db4437); border-color: var(--error-color, #db4437); margin-left: auto; }
+  .toolbar button.toolbar-add {
+    margin-left: auto; color: inherit; border-color: color-mix(in srgb, currentColor 45%, transparent);
+  }
+  .toolbar button.toolbar-add[hidden] { display: none; }
+  .empty > div { margin-top: 16px; }
+  dialog {
+    width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-sizing: border-box;
+    padding: 20px; border: none; border-radius: 12px; overflow: auto;
+    background: var(--card-background-color, var(--primary-background-color)); color: var(--primary-text-color);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+  dialog h2 { margin: 0 0 12px; font-size: 20px; font-weight: 500; }
+  dialog label { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; font-size: 14px; color: var(--secondary-text-color); }
+  dialog label[hidden] { display: none; }
+  dialog input:not([type=radio]), dialog select, dialog textarea {
+    font: inherit; padding: 8px; border-radius: 6px; box-sizing: border-box; width: 100%;
+    border: 1px solid var(--divider-color, rgba(0,0,0,0.2));
+    background: var(--secondary-background-color, transparent); color: var(--primary-text-color);
+  }
+  dialog textarea { font-family: ui-monospace, monospace; font-size: 12px; resize: vertical; }
+  dialog fieldset { border: 1px solid var(--divider-color, rgba(0,0,0,0.2)); border-radius: 6px; margin: 12px 0; display: flex; gap: 24px; }
+  dialog legend { font-size: 13px; color: var(--secondary-text-color); padding: 0 4px; }
+  dialog label.radio { flex-direction: row; align-items: center; gap: 6px; margin: 4px 0; color: var(--primary-text-color); }
+  dialog .steps { margin: 0 0 8px; padding-left: 20px; font-size: 14px; }
+  dialog .steps li { margin: 4px 0; }
+  dialog .error { color: var(--error-color, #db4437); font-size: 14px; min-height: 1em; }
+  dialog .filename { font-size: 13px; color: var(--secondary-text-color); margin-bottom: 4px; }
+  .dlg-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
   @media (max-width: 600px) { .content { padding: 8px; } .grid { grid-template-columns: minmax(0, 1fr); } }
 `;
 

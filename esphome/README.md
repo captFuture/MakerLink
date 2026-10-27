@@ -8,14 +8,14 @@
 
 Ist Home Assistant nicht verbunden, zeigt das Display „HA offline“.
 
-**Geräte-Varianten** (diese Datei im Geräte-YAML einbinden):
+**Geräte-Varianten:** Die Datei für einen neuen Reader erzeugt das MakerLink-Panel unter **Reader hinzufügen** (mit freiem Gerätenamen). Die Vorlagen liegen auch hier als `tocopy-*.yaml`: kopieren, nach `<devicename>.yaml` umbenennen und `devicename` anpassen. Sie werden aus `custom_components/makerlink/readers.py` erzeugt (Test `tests/test_readers.py` prüft das), Änderungen gehören dorthin.
 
 | Datei | Hardware |
 |---|---|
-| `makerlink-reader-esp32s3-supermini.yaml` | ESP32-S3 **Super Mini** (4 MB Flash) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
-| `makerlink-reader-esp32s3-xiao.yaml` | **XIAO ESP32-S3** (8 MB Flash) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
-| `makerlink-reader-xiao-esp32c5-zigbee.yaml` | Seeed XIAO ESP32-C5 + PN532 (HSU) + LCD und/oder OLED über **Zigbee**, Machbarkeitsstufe, siehe unten |
-| `makerlink-reader-esp8266-rc522-lcd.yaml` | Bestands-Reader (30 Stück): D1 Mini + RC522 (SPI) + LCD 16x2. Hardware bleibt unverändert, wird nur neu geflasht |
+| `tocopy-makerlink-esp32s3-supermini.yaml` | ESP32-S3 **Super Mini** (4 MB Flash) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
+| `tocopy-makerlink-esp32s3-xiao.yaml` | **XIAO ESP32-S3** (8 MB Flash) + PN532 (HSU) + **LCD 16x2 und/oder OLED 128x32** |
+| `tocopy-makerlink-xiao-esp32c5-zigbee.yaml` | Seeed XIAO ESP32-C5 + PN532 (HSU) + LCD und/oder OLED über **Zigbee**, Machbarkeitsstufe, siehe unten |
+| `tocopy-makerlink-esp8266-rc522-lcd.yaml` | Bestands-Reader (30 Stück): D1 Mini + RC522 (SPI) + LCD 16x2. Hardware bleibt unverändert, wird nur neu geflasht |
 
 **Bausteine** in `common/`:
 
@@ -100,27 +100,16 @@ Der C5 spricht **Zigbee statt WLAN**: Er hat keine ESPHome-API und kein OTA, Upd
    /config/esphome/
      secrets.yaml
      maker9998.yaml                         ← deine Geräte-YAML
-     makerlink-reader-esp32s3-xiao.yaml          ← Gerätevarianten aus dem Repo
-     makerlink-reader-xiao-…yaml
+     tocopy-makerlink-*.yaml                     ← Vorlagen aus dem Repo (optional)
      common/                                ← Bausteine
      makerlink/
        pn532_hsu.h
        pn532_uart.h
    ```
-2. Pro Gerät eine kleine YAML anlegen:
-   ```yaml
-   substitutions:
-     devicename: maker9998
-     friendly_name: Reader Demo
-     # display_i2c_address: "0x3F"   # LCD, Standard 0x27
-     # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
-   packages:
-     reader: !include makerlink-reader-esp32s3-xiao.yaml
-   ```
-   Die Firmware enthält das OLED und lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
+2. Pro Gerät eine YAML anlegen: im MakerLink-Panel **Reader hinzufügen** wählen und die erzeugte Datei in ESPHome als neues Gerät einfügen (oder eine `tocopy-*.yaml` kopieren und `devicename` ändern). Die LCD/OLED-Adressen lassen sich dort über die auskommentierten Substitutions `display_i2c_address` und `oled_i2c_address` ändern. Die Firmware enthält das OLED und lädt beim ersten Kompilieren den Font „Roboto Mono“ von Google Fonts und braucht dafür Internet.
 3. `secrets.yaml` braucht diese Einträge: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz), `api_encryption_key` (`openssl rand -base64 32`). Der API-Schlüssel gilt auch für OTA-Uploads. API-Key und URL des MARS-Servers gehören **nicht** mehr auf den Reader.
 4. Den Reader flashen und in HA über die ESPHome-Integration hinzufügen.
-5. In der MakerLink-Integration unter **Maschine oder Tür hinzufügen** das Reader-Gerät, die Text-Entitäten, das Schaltziel (Relais oder Steckdose) und die Sicherheitsschalter auswählen.
+5. Im MakerLink-Panel unter **Neue Reader** auf **Einrichten** klicken. Display, Relais und Sicherheitsschalter erkennt MakerLink an den Entitätsnamen der Firmware („Display Zeile 1/2“, „Relais“, „Sicherheitsschalter 1/2“), dort wählst du nur Funktion, Name und Unit-ID.
 
 ## Hinweise
 - **Sicherheitsschalter:** Sie werden gegen GND geschaltet. `off` bedeutet geschlossen. Unbekannt oder nicht verfügbar gilt als offen (fail-safe).

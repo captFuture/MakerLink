@@ -5,10 +5,12 @@
 substitutions:
   devicename: makerlink-s3-mini
   friendly_name: MakerLink Reader ESP32-S3 Super Mini
+  # display_i2c_address: "0x3F"   # LCD, Standard 0x27
+  # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
 
 esphome:
   name: ${devicename}
-  
+
 packages:
   base: !include common/makerlink-reader-base.yaml
   board: !include common/esp32s3-supermini.yaml

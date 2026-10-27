@@ -16,48 +16,26 @@ Architektur und Entscheidungen: [docs/PLAN.md](docs/PLAN.md) · Backend-API: [do
 1. In HACS über ⋮ → **Benutzerdefinierte Repositories** die URL dieses Repositories mit Kategorie **Integration** hinzufügen.
 2. **MakerLink** installieren und Home Assistant neu starten.
 3. Unter Einstellungen → Geräte & Dienste → **Integration hinzufügen** → MakerLink die URL von `machineswitch.php` und den API-Key eintragen.
-4. In der Integration über **Maschine oder Tür hinzufügen** pro Einheit Folgendes wählen:
-   - Unit-ID (Standard 9999 = Test-ID, mehrfach verwendbar; später über Neu konfigurieren änderbar)
-   - Reader-Gerät
-   - Display-Text-Entitäten
-   - Schaltziel (Relais am Reader oder Steckdose)
-   - optional die Sicherheitsschalter
+4. Reader einrichten: siehe unten, alles passiert im MakerLink-Panel in der Seitenleiste.
 
 Voraussetzung ist Home Assistant 2025.4 oder neuer.
 
 ## Installation der Reader (ESPHome)
 HACS installiert nur die Integration (`custom_components/makerlink/`). Die Reader-Firmware liegt im Ordner [esphome/](esphome/README.md) und wird **nicht** von HACS verteilt. Du brauchst das ESPHome-Add-on (oder ESPHome Device Builder) in Home Assistant.
 
-**1. Dateien kopieren.** Den **Inhalt** von `esphome/` aus diesem Repository (Download als ZIP oder `git clone`) in den ESPHome-Config-Ordner von Home Assistant kopieren, also nach `/config/esphome/` (per Samba, SSH oder VS-Code-Add-on). Alle Ordner und Dateien kopieren, auch wenn du nur eine Variante nutzt, weil sie sich gegenseitig einbinden:
-```
-/config/esphome/
-  secrets.yaml                        ← deine Zugangsdaten (nicht im Repo)
-  maker9998.yaml                      ← deine Geräte-YAML (siehe Schritt 3)
-  makerlink-reader-*.yaml             ← Gerätevarianten aus dem Repo
-  common/                             ← Bausteine (Basis, Hardware, Displays)
-  makerlink/
-    pn532_hsu.h
-    pn532_uart.h
-```
-Die Ordnerstruktur darf nicht verändert werden, die Include-Pfade (`common/…`, `makerlink/pn532_*.h`) gelten relativ zu `/config/esphome/`.
+**Einmalig vorab**
+1. Den **Inhalt** von `esphome/` aus diesem Repository (Download als ZIP oder `git clone`) nach `/config/esphome/` kopieren (Samba, SSH oder VS-Code-Add-on). Alle Ordner und Dateien, auch wenn du nur eine Variante nutzt, weil sie sich gegenseitig einbinden. Die Ordnerstruktur darf nicht verändert werden, die Include-Pfade (`common/…`, `makerlink/pn532_*.h`) gelten relativ zu `/config/esphome/`.
+2. `secrets.yaml` im selben Ordner braucht: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz, bei Bedarf dieselben Werte oder ein Dummy), `api_encryption_key` (`openssl rand -base64 32`). Der API-Schlüssel gilt auch für OTA-Uploads. API-Key und URL des MARS-Servers gehören nicht auf den Reader, die stehen nur in der Integration.
 
-**2. `secrets.yaml`** (im selben Ordner) braucht: `wifi_ssid`, `wifi_password` (Hauptnetz), `wifi_ssid1`, `wifi_password1` (Fallback-Netz, bei Bedarf dieselben Werte oder ein Dummy), `api_encryption_key` (`openssl rand -base64 32`). Der API-Schlüssel gilt auch für OTA-Uploads. API-Key und URL des MARS-Servers gehören nicht auf den Reader, die stehen nur in der Integration.
+**Pro neuem Reader (4 Schritte, geführt im Panel)**
+1. **MakerLink-Panel → „Reader hinzufügen“.** Hardware wählen, der Gerätename ist schon vorbelegt (`makerlink-01`, `-02`, …, immer ein freier). Das Panel erzeugt die fertige YAML. Kopieren.
+2. **In ESPHome** ein neues Gerät mit genau diesem Namen anlegen („Leere Konfiguration“), den Inhalt durch die kopierte YAML ersetzen und **Install** wählen. Beim ersten Mal per USB, danach per OTA.
+3. **In Home Assistant** (Einstellungen → Geräte & Dienste) das gefundene ESPHome-Gerät **hinzufügen**. Das Panel zeigt dir diesen Schritt an, solange der Reader gefunden, aber noch nicht bestätigt ist.
+4. **Zurück im Panel** erscheint der Reader unter **„Neue Reader“**. **Einrichten** klicken: Name, Funktion (Maschine oder Tür), Unit-ID (Standard 9999 = Test-ID) und bei Maschinen die Abrechnungsart. Display, Relais und Sicherheitsschalter werden automatisch zugeordnet. Mit **Identifizieren** zeigt der Reader 10 Sekunden „HIER BIN ICH“, so erkennst du ihn am Tisch.
 
-**3. Reader definieren.** Pro Reader eine eigene kleine YAML anlegen, zB `maker9998.yaml`. Sie enthält nur Name und die passende Gerätevariante:
-```yaml
-substitutions:
-  devicename: maker9998        # eindeutig, nur Kleinbuchstaben, Ziffern, Bindestrich
-  friendly_name: Reader Drucker 1
-  # display_i2c_address: "0x3F"   # LCD, Standard 0x27
-  # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
-packages:
-  reader: !include makerlink-reader-esp32s3-xiao.yaml
-```
-Beide Displays (LCD und OLED) sind in jeder neuen Firmware enthalten. Welche Variante zu welcher Hardware gehört, steht in der Tabelle in [esphome/README.md](esphome/README.md). Die Gerätevarianten selbst nicht bearbeiten, sonst gehen Änderungen beim nächsten Update verloren. Eigene Anpassungen gehören in die Geräte-YAML.
+Die Funktion ist nicht in der Firmware: Ein Reader kann jederzeit im Panel über **Bearbeiten** von Maschine auf Tür (oder zurück) umgestellt werden, ohne Neu-Flashen. Beim Wechsel werden die Einstellungen der Einheit zurückgesetzt, und er ist gesperrt, solange eine Session läuft. Dort lassen sich auch Name, Unit-ID, Abrechnungsart und Schaltziel ändern und die Einheit entfernen.
 
-**4. Flashen.** Beim ersten Mal per USB (ESPHome → Install → Plug into this computer / Manual download), danach per OTA über WLAN. Der Reader taucht dann in Home Assistant unter der ESPHome-Integration auf und wird dort hinzugefügt.
-
-**5. In MakerLink verknüpfen.** Unter **Maschine oder Tür hinzufügen** das Reader-Gerät, die beiden Display-Text-Entitäten, das Schaltziel und die Sicherheitsschalter auswählen (siehe oben).
+Die erzeugte YAML entspricht den Dateien `esphome/tocopy-makerlink-*.yaml` (nur mit anderem Namen). Wer lieber von Hand arbeitet, kopiert eine davon und passt `devicename` an. Der manuelle Weg über **Maschine oder Tür hinzufügen** in den Integrationseinstellungen funktioniert weiterhin, zB für Reader anderer Technik.
 
 Der Zigbee-Reader (XIAO ESP32-C5) hat kein WLAN, keine API und kein OTA und wird nur per USB geflasht. Details dazu in [esphome/README.md](esphome/README.md).
 
@@ -66,7 +44,7 @@ Nach der Installation erscheint **MakerLink** in der Seitenleiste, sichtbar für
 - Status, Displayinhalt, Benutzer und Laufzeit der Session, Nachlauf, letzte Kosten und Guthaben
 - Zustand von Schaltziel, Sicherheitsschaltern und Reader (online/offline), offene Buchungen
 
-Aktionen dort: Session beenden, Nachlauf beenden, Admin-Modus, Außer Betrieb, Tür öffnen, Link zur Geräteseite.
+Aktionen dort: Session beenden, Nachlauf beenden, Admin-Modus, Außer Betrieb, Tür öffnen, Link zur Geräteseite. Administratoren sehen zusätzlich **Reader hinzufügen**, **Neue Reader** und **Bearbeiten** (siehe Installation der Reader).
 
 ## Entitäten pro Einheit
 | Entität | Maschine | Tür |

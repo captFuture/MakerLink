@@ -138,7 +138,11 @@ class MakerLinkHub:
         stored = await self._store.async_load() or {}
         for subentry in self.entry.subentries.values():
             if subentry.subentry_type == SUBENTRY_UNIT:
-                self._setup_unit(subentry, stored.get(subentry.subentry_id) or {})
+                saved = stored.get(subentry.subentry_id) or {}
+                # Switched between machine and door: the old runtime settings do not apply.
+                if saved.get("kind", subentry.data[CONF_KIND]) != subentry.data[CONF_KIND]:
+                    saved = {}
+                self._setup_unit(subentry, saved)
 
         bus = self.hass.bus
         self._unsubs.append(bus.async_listen(EVENT_READER_TAG, self._handle_reader_tag))
@@ -368,4 +372,4 @@ class MakerLinkHub:
         self._store.async_delay_save(self._data_to_save, 1)
 
     def _data_to_save(self) -> dict[str, Any]:
-        return {sub_id: unit.as_store() for sub_id, unit in self.units.items()}
+        return {sub_id: {**unit.as_store(), "kind": unit.kind} for sub_id, unit in self.units.items()}

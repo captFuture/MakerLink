@@ -231,3 +231,21 @@ Kontext: Der User flashte die S3-Firmware und bekam einen Bootloop (`spi_flash: 
 **Fix 2 (Firmware):** Lokales Scan-Feedback. Sofort beim Lesen zeigt das Display „Karte erkannt / Bitte warten...“, bis neue Texte aus HA kommen, höchstens 4 s (Globals `g_scan_pending`/`g_scan_ms`, in allen Display-Paketen).
 
 Version 0.4.0 → **0.4.1**.
+
+## 2026-10-27 – Onboarding zu kompliziert (Planung)
+> the onboarding of a device is too complicated at the moment. What was holding me back:
+> - the yaml files for esphome are always a copy of a known hardware but the filenames are difficult to get right.
+> - Our readers have unique ids (and a description, and a function like door, machine [with sub-function]) - it is difficult to get it right the first time
+> - the process is > flashing, finding the device in esphome integration and add it to makerlink integration, then it shows in the makerlink page, this is complicated and confusing.
+> - The reader device can not be switched from door to machine and vice versa
+>
+> the readers themselves work great
+
+**Analyse:** Name, Funktion und Unit-ID standen an drei Stellen (YAML, ESPHome-Gerät, MakerLink-Einheit) und mussten von Hand zusammengeführt werden (sechs Entitäten-Auswahlfelder). Die Funktion (Tür/Maschine) steckt gar nicht in der Firmware, das Umstellen scheiterte nur daran, dass der Neu-konfigurieren-Dialog die Art nicht änderbar machte. Außerdem passten die Dateinamen in der README nicht zu denen im Repo (`makerlink-reader-*` statt `tocopy-makerlink-*`).
+
+**Entscheidungen des Users** (Rückfrage am 2026-10-27):
+- Einrichten im **MakerLink-Panel** statt im HA-Config-Flow.
+- **Eigene YAML pro Reader**, dafür ein Generator im Panel (statt generischer Firmware mit MAC-Suffix).
+- Der ESPHome-Bestätigungsklick bleibt, das Panel zeigt den Schritt als **Hinweis** an.
+
+**Ergebnis (v0.5.0):** Siehe PLAN.md 3.6. Panel: „Reader hinzufügen“ (YAML-Generator mit freiem Namen), „Neue Reader“ mit Einrichten/Identifizieren, Bearbeiten (Name, Funktion Maschine ↔ Tür, Unit-ID, Abrechnungsart, Schaltziel) und Entfernen. README-Dateinamen korrigiert.

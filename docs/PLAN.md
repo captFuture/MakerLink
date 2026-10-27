@@ -82,6 +82,8 @@ custom_components/makerlink/
   sensor.py / binary_sensor.py / switch.py / number.py / select.py / button.py
   diagnostics.py
   ws_api.py          WebSocket-API fürs Panel: makerlink/units, makerlink/subscribe, makerlink/action
+  readers.py         YAML-Generator, Entitäten-Erkennung, Einheiten-Daten (ohne HA-Import)
+  discovery.py       Findet neue MakerLink-Reader im ESPHome-Bestand
   panel.py           Registriert das Seitenleisten-Panel (für alle Benutzer) und die statischen Dateien
   frontend/makerlink-panel.js   Panel als Web Component ohne Build-Schritt
   strings.json, translations/{de,en}.json
@@ -125,8 +127,16 @@ Das Schaltziel ist eine beliebige `switch`-Entity (ZHA/Z2M, Shelly, Tasmota …)
 - **Stufe 3, Integration:** Reader-Adapter für ZHA-Geräte. Kartenscan über `zha_event` (Zuordnung per `device_id`), Display über `zha.set_zigbee_cluster_attribute`. Schalter und Sicherheitsschalter laufen wie bisher über die normalen Entitäten.
 - **Grenzen:** kein OTA über Zigbee, Reaktionszeit des Funknetzes, C5-Zigbee laut Hersteller weniger erprobt als H2/C6.
 
-### 3.6 Discovery und Onboarding (Phase 1b)
-Die Firmware setzt `esphome: project: name: makeraustria.makerlink_reader`. `discovery.py` erkennt solche Geräte im Device-Registry und startet einen Discovery-Flow, der die Entitäten des Geräts vorbelegt.
+### 3.6 Onboarding im Panel (v0.5.0)
+Der Weg vom Flashen bis zur Einheit ist auf vier Schritte reduziert, alle geführt im Panel. Entscheidungen des Users (2026-10-27): Panel statt HA-Config-Flow, eigene YAML pro Reader mit Generator, ESPHome-Bestätigung bleibt als Klick mit Hinweis im Panel.
+
+- **YAML-Generator** (`readers.py`, `makerlink/reader_yaml`): erzeugt die Geräte-YAML je Hardware mit freiem Namen (`makerlink-NN`, Vorschlag aus den vorhandenen ESPHome-Geräten, Namensprüfung). Die Vorlagen sind dieselben wie `esphome/tocopy-makerlink-*.yaml`, die aus dem Generator geschrieben werden (Test gegen Drift). Der Zigbee-Reader fehlt bewusst (kein ESPHome).
+- **Erkennung** (`discovery.py`): Geräte der ESPHome-Integration mit Projekt `makeraustria.makerlink_reader` (Hersteller `makeraustria`, Modell `makerlink_reader`), die noch zu keiner Einheit gehören, erscheinen als „Neue Reader“. Dazu der Hinweis, wenn ESPHome ein Gerät gefunden, aber noch nicht bestätigt hat (offener ESPHome-Flow). Das Panel erhält das live über `makerlink/subscribe` (Registry-Events) und fragt zusätzlich alle 5 s nach.
+- **Entitäten-Zuordnung** (`classify_entities`): Display-Zeilen, Relais und Sicherheitsschalter werden an den Namen der Firmware-Entitäten erkannt, damit das Formular nur Name, Funktion, Unit-ID, Abrechnungsart und optional ein anderes Schaltziel fragt.
+- **Einheiten verwalten** (admin-only WebSocket): `unit_add`, `unit_update`, `unit_remove` arbeiten direkt auf den Subentries (`async_add_subentry` usw.), nicht über den Config-Flow. Der alte Flow bleibt als manueller Weg.
+- **Maschine ↔ Tür:** Die Funktion steckt nur in der Einheit, nicht in der Firmware. `unit_update` kann `kind` ändern und baut die Daten neu (`build_unit_data`: Hardware bleibt, Maschinen-Felder weg bzw. Interlocks aus der Erkennung zurück). Die gespeicherten Laufzeit-Einstellungen im Store tragen jetzt `kind` und werden bei Wechsel verworfen. Gesperrt, solange Session oder offene Buchung besteht. Die Abrechnungsart einer unveränderten Maschine wird wie beim Select über `set_setting` geändert, weil der Store gegenüber den Entry-Daten gewinnt.
+- **Identifizieren:** `makerlink/identify` zeigt 10 s „HIER BIN ICH“ plus Gerätename auf dem Display und stellt danach die alten Texte wieder her.
+- **Offen / ungeprüft:** Hersteller/Modell, die HA aus dem ESPHome-Projektnamen ableitet, sind aus dem HA-Quellcode erinnert, nicht an einer echten Instanz bestätigt. Config-Flow-Tests für den neuen Weg fehlen noch (nur die reine Logik ist getestet).
 
 ## 4. Offline-Fallback (Phase 1c)
 - **Backend:** `action=trainedCards&unitid=X` liefert gehashte UIDs (`sha256(salt + mars_uid)` gekürzt auf 8 Byte). `action=offlineSession&rfid&unitid&type&start&end&offline_id` rechnet idempotent ab.
@@ -136,7 +146,7 @@ Die Firmware setzt `esphome: project: name: makeraustria.makerlink_reader`. `dis
 
 ## 5. Phasen
 1. **Phase 1a – Kern:** api, mars_format, display, Controller (Maschine + Tür), Hub- und Subentry-Flow, Entitäten, externe Steckdosen, Interlock, Referenz-Firmware ohne Offline. Tests.
-2. **Phase 1b – Discovery:** device_registry-Listener und Discovery-Flow.
+2. **Phase 1b – Discovery:** umgesetzt als Onboarding im Panel (3.6, v0.5.0).
 3. **Phase 1c – Offline:** Backend-Patch, offline.py, Firmware-Erweiterung.
 4. **Phase 2:** Diagnose-Dashboards, Statistiken, Kiln-Spezialfälle.
 
@@ -149,7 +159,8 @@ Die Firmware setzt `esphome: project: name: makeraustria.makerlink_reader`. `dis
 - **Backend-Patch** (`backend/machineswitch.php`): `end`-Parameter, idempotenter Stop, SQL-Injection-Fix. Muss noch auf den Server.
 - **v0.3.0:** Seitenleisten-Panel „MakerLink“ mit Live-Übersicht und Aktionen. Außerdem die ESPHome-Firmware mit PN532 über HSU und OLED-Variante.
 - **Noch offen in 1a:** Config-Flow-Tests mit `pytest-homeassistant-custom-component` und ein E2E-Test auf echter Hardware.
-- **Nächste Schritte:** Phase 1b (Discovery), danach 1c (Offline inklusive Backend-Patch).
+- **v0.5.0 (2026-10-27):** Onboarding im Panel (Abschnitt 3.6): YAML-Generator, „Neue Reader“, Einrichten/Bearbeiten/Entfernen, Maschine ↔ Tür, Identifizieren.
+- **Nächste Schritte:** Test von 3.6 in echtem HA, danach Phase 1c (Offline inklusive Backend-Patch).
 
 ## 6. Verifikation
 - **Unit-Tests** (lokal, ohne HA): UID-Format, Response-Parsing, Display, Zustandsautomat mit Fake-API und Fake-Hardware.

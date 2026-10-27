@@ -12,7 +12,7 @@ substitutions:
   p_rfid_ss: GPIO15
 
 esphome:
-  name: ${devicename}  
+  name: ${devicename}
 
 packages:
   base: !include common/makerlink-reader-base.yaml
