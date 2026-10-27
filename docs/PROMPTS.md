@@ -249,3 +249,10 @@ Version 0.4.0 → **0.4.1**.
 - Der ESPHome-Bestätigungsklick bleibt, das Panel zeigt den Schritt als **Hinweis** an.
 
 **Ergebnis (v0.5.0):** Siehe PLAN.md 3.6. Panel: „Reader hinzufügen“ (YAML-Generator mit freiem Namen), „Neue Reader“ mit Einrichten/Identifizieren, Bearbeiten (Name, Funktion Maschine ↔ Tür, Unit-ID, Abrechnungsart, Schaltziel) und Entfernen. README-Dateinamen korrigiert.
+
+## 2026-10-27 – Logo für die Integration
+> ich möchte ein logo bei der hacs integration anzeigen
+>
+> (SVG `makerlink5.svg` mitgeliefert: Zahnrad, NFC-Karte, Funkwellen)
+
+**Ergebnis (v0.5.1):** Quelle in `docs/logo/makerlink.svg`. Daraus gerenderte PNGs in `custom_components/makerlink/brand/` (`icon`, `logo`, `dark_logo`, jeweils auch `@2x`), das ab Home Assistant 2026.3 lokal geladen wird. Offen: Ob HACS selbst das Logo in seiner Liste zeigt, ist nicht bestätigt (ein Forenbeitrag sagt, nur mit Eintrag im Brands-Repository). Das Wortmarken-Logo ist Icon plus Text „MakerLink“ in der Systemschrift, nicht das Original.
