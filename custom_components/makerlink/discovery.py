@@ -29,7 +29,10 @@ def _is_reader(hass: HomeAssistant, device: dr.DeviceEntry) -> bool:
     if not on_esphome:
         return False
     project = f"{device.manufacturer or ''}.{device.model or ''}".lower()
-    return project.startswith(ESPHOME_PROJECT_NAME)
+    if project.startswith(ESPHOME_PROJECT_NAME):
+        return True
+    # Fallback if HA shows the project differently: the firmware's display entity.
+    return "display_line1" in detect(hass, device.id)
 
 
 def device_entities(hass: HomeAssistant, device_id: str) -> list[tuple[str, str | None]]:

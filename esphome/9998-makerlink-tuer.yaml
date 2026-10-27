@@ -3,7 +3,7 @@
 # Details zur Hardware: common/esp32s3-supermini.yaml, common/esp32s3-pn532-hsu.yaml, Displays: common/display-dual.yaml
 
 substitutions:
-  devicename: 9998-makerlink-tuer
+  devicename: makerlink-9998
   friendly_name: 9998 DEMO MakerLink Tuer Supermini
 
 esphome:

@@ -3,7 +3,7 @@
 # Details zur Hardware: common/esp32s3-xiao.yaml, common/esp32s3-pn532-hsu.yaml, Displays: common/display-dual.yaml
   
 substitutions:
-  devicename: 9999-makerlink-reader
+  devicename: makerlink-9999
   friendly_name: 9999 DEMO MakerLink Reader XIAO ESP32-S3
 
 esphome:

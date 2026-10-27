@@ -3,8 +3,8 @@
 # Details zur Hardware: common/esp32s3-supermini.yaml, common/esp32s3-pn532-hsu.yaml, Displays: common/display-dual.yaml
 
 substitutions:
-  devicename: makerlink-s3-mini
-  friendly_name: MakerLink Reader ESP32-S3 Super Mini
+  devicename: makerlink-0815
+  friendly_name: MakerLink ESP32-S3 Supermini
   # display_i2c_address: "0x3F"   # LCD, Standard 0x27
   # oled_i2c_address: "0x3D"      # OLED, Standard 0x3C
 

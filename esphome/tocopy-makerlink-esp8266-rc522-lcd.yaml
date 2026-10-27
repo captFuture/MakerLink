@@ -3,8 +3,8 @@
 # bisherige Firmware, aber ohne Business-Logik.
 
 substitutions:
-  devicename: makerlink-wemos
-  friendly_name: MakerLink Reader Wemos D1 Mini
+  devicename: makerlink-0815
+  friendly_name: MakerLink WemosD1
   p_relay: GPIO16
   p_sda: GPIO4
   p_scl: GPIO5

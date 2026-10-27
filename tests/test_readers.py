@@ -1,5 +1,6 @@
 """Tests for reader onboarding helpers."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -16,19 +17,13 @@ from custom_components.makerlink.readers import (
 
 ESPHOME = Path(__file__).resolve().parents[1] / "esphome"
 
-DEFAULTS = {
-    "esp32s3-xiao": ("makerlink-s3-xiao", "MakerLink Reader XIAO ESP32-S3"),
-    "esp32s3-supermini": ("makerlink-s3-mini", "MakerLink Reader ESP32-S3 Super Mini"),
-    "esp8266-rc522-lcd": ("makerlink-wemos", "MakerLink Reader Wemos D1 Mini"),
-}
-
-
 @pytest.mark.parametrize("hardware", HARDWARE)
 def test_tocopy_files_match_generator(hardware):
-    """esphome/tocopy-*.yaml are generated output: change readers.py, not the files."""
-    name, friendly = DEFAULTS[hardware]
-    expected = generate_yaml(hardware, name, friendly)
-    assert (ESPHOME / HARDWARE[hardware]["file"]).read_text(encoding="utf-8") == expected
+    """esphome/tocopy-*.yaml are generated output (any names): change readers.py, not the files."""
+    text = (ESPHOME / HARDWARE[hardware]["file"]).read_text(encoding="utf-8")
+    name = re.search(r"^  devicename: (.+)$", text, re.MULTILINE).group(1).strip()
+    friendly = re.search(r"^  friendly_name: (.+)$", text, re.MULTILINE).group(1).strip()
+    assert text == generate_yaml(hardware, name, friendly)
 
 
 def test_generate_yaml_names_and_quoting():

@@ -3,7 +3,7 @@
 # bisherige Firmware, aber ohne Business-Logik.
 
 substitutions:
-  devicename: 9997-makerlink-reader
+  devicename: makerlink-9997
   friendly_name: 9997 DEMO MakerLink Reader Wemos
   p_relay: GPIO16
   p_sda: GPIO4
