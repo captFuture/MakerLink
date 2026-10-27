@@ -88,7 +88,7 @@ DETECTED = classify_entities(ENTITIES)
 def test_add_machine_uses_detected_entities_and_defaults():
     data = build_unit_data({"kind": "machine", "unit_id": "12", "reader_device": "dev1"}, None, DETECTED)
     assert data["power_entity"] == "switch.r_relais"
-    assert data["interlock_1"] == "binary_sensor.r_sicherheitsschalter_1"
+    assert "interlock_1" not in data and "interlock_2" not in data  # unwired inputs read "open"
     assert data["machine_type"] == "machine"
     assert data["min_balance"] == 5.0
     assert data["unit_id"] == 12
@@ -112,9 +112,10 @@ def test_switch_machine_to_door_and_back_keeps_hardware():
     assert door["power_entity"] == machine["power_entity"]
     assert door["display_line1"] == machine["display_line1"]
     assert "machine_type" not in door and "shutdown_time" not in door
-    back = build_unit_data({"kind": "machine"}, door, DETECTED)
+    back = build_unit_data({"kind": "machine", "interlocks": 1}, door, DETECTED)
     assert back["kind"] == "machine"
     assert back["interlock_1"] == "binary_sensor.r_sicherheitsschalter_1"
+    assert "interlock_2" not in back
     assert back["machine_type"] == "machine" and "pulse_time" not in back
 
 
@@ -148,3 +149,28 @@ def test_form_errors(form, detected, key):
     with pytest.raises(UnitFormError) as err:
         build_unit_data(form, None, detected)
     assert err.value.key == key
+
+
+def test_interlock_count_add_change_and_keep():
+    base = {"kind": "machine", "unit_id": 1, "reader_device": "d"}
+    two = build_unit_data({**base, "interlocks": 2}, None, DETECTED)
+    assert two["interlock_1"].endswith("_1") and two["interlock_2"].endswith("_2")
+    one = build_unit_data({"interlocks": 1}, two, DETECTED)
+    assert "interlock_1" in one and "interlock_2" not in one
+    none = build_unit_data({"interlocks": 0}, one, DETECTED)
+    assert "interlock_1" not in none
+    # not given: keep as is, also custom entities from the manual flow
+    custom = {**two, "interlock_1": "binary_sensor.custom"}
+    assert build_unit_data({}, custom, DETECTED)["interlock_1"] == "binary_sensor.custom"
+    assert build_unit_data({"interlocks": 2}, custom, DETECTED)["interlock_1"] == "binary_sensor.custom"
+
+
+def test_interlock_errors():
+    base = {"kind": "machine", "unit_id": 1, "reader_device": "d"}
+    with pytest.raises(UnitFormError) as err:
+        build_unit_data({**base, "interlocks": 3}, None, DETECTED)
+    assert err.value.key == "invalid_interlocks"
+    without = {k: v for k, v in DETECTED.items() if k != "interlock_2"}
+    with pytest.raises(UnitFormError) as err:
+        build_unit_data({**base, "interlocks": 2}, None, without)
+    assert err.value.key == "no_interlock_entity"

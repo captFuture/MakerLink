@@ -209,6 +209,7 @@ _UNIT_FIELDS = {
     vol.Optional("min_balance"): vol.Any(None, vol.Coerce(float)),
     vol.Optional("shutdown_time"): vol.Any(None, "", vol.Coerce(float)),
     vol.Optional("pulse_time"): vol.Any(None, vol.Coerce(float)),
+    vol.Optional("interlocks"): vol.All(vol.Coerce(int), vol.Range(min=0, max=2)),
 }
 
 

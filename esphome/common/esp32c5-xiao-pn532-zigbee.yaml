@@ -40,7 +40,7 @@ esphome:
   friendly_name: ${friendly_name}
   project:
     name: makeraustria.makerlink_reader_zigbee
-    version: "0.5.1"
+    version: "0.5.2"
   includes:
     # Pfad relativ zum ESPHome-Config-Ordner (siehe esphome/README.md).
     - makerlink/pn532_uart.h

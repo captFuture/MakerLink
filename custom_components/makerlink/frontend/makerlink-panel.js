@@ -64,6 +64,9 @@ const TEXT = {
     fUnit: "Unit-ID",
     fUnitHint: "9999 ist die Test-ID und darf mehrfach vergeben werden.",
     fType: "Abrechnung",
+    fInterlocks: "Sicherheitsschalter (Tür/Schutz)",
+    fInterlocksNone: "keine",
+    fInterlocksHint: "Nur wenn angeschlossen: Bei offenem Schalter zeigt das Display „Tür offen“ und die Maschine startet nicht.",
     fPower: "Schaltziel",
     fPowerAuto: "Relais am Reader",
     fKindNote: "Beim Wechsel zwischen Maschine und Tür werden die Einstellungen der Einheit zurückgesetzt (Nachlauf, Mindestguthaben, …).",
@@ -78,6 +81,7 @@ const TEXT = {
       invalid_devicename: "Nur Kleinbuchstaben, Ziffern und Bindestrich, höchstens 31 Zeichen.",
       devicename_exists: "Dieser Gerätename existiert in ESPHome schon.",
       invalid_unit_id: "Die Unit-ID muss zwischen 1 und 99999 liegen.",
+      no_interlock_entity: "Dieser Reader meldet keinen passenden Sicherheitsschalter-Eingang.",
     },
     prepTitle: "Neuen Reader vorbereiten",
     prepSteps: [
@@ -168,6 +172,9 @@ const TEXT = {
     fUnit: "Unit ID",
     fUnitHint: "9999 is the test ID and may be used several times.",
     fType: "Billing",
+    fInterlocks: "Safety switches (door/guard)",
+    fInterlocksNone: "none",
+    fInterlocksHint: "Only if wired: with an open switch the display shows “Tür offen” and the machine will not start.",
     fPower: "Switch target",
     fPowerAuto: "Relay on the reader",
     fKindNote: "Switching between machine and door resets the settings of the unit (cooldown, minimum balance, …).",
@@ -182,6 +189,7 @@ const TEXT = {
       invalid_devicename: "Lowercase letters, digits and hyphen only, at most 31 characters.",
       devicename_exists: "This device name already exists in ESPHome.",
       invalid_unit_id: "The unit ID must be between 1 and 99999.",
+      no_interlock_entity: "This reader has no matching safety switch input.",
     },
     prepTitle: "Prepare a new reader",
     prepSteps: [
@@ -744,6 +752,12 @@ class MakerLinkPanel extends HTMLElement {
             .map((m) => `<option value="${esc(m)}" ${m === (unit?.machine_type || "machine") ? "selected" : ""}>${esc(t.types[m] || m)}</option>`)
             .join("")}</select>
         </label>
+        <label data-for="machine">${esc(t.fInterlocks)}
+          <select name="interlocks">${[0, 1, 2]
+            .map((n) => `<option value="${n}" ${n === (unit?.interlocks?.length || 0) ? "selected" : ""}>${esc(n === 0 ? t.fInterlocksNone : n)}</option>`)
+            .join("")}</select>
+          <span class="hint">${esc(t.fInterlocksHint)}</span>
+        </label>
         <label>${esc(t.fPower)}
           <select name="power_entity" ${autoRelay || editing ? "" : "required"}>${powerOptions}</select>
         </label>
@@ -775,7 +789,10 @@ class MakerLinkPanel extends HTMLElement {
       };
       if (editing) msg.unit = unit.id;
       else msg.reader_device = reader.device_id;
-      if (msg.kind === "machine") msg.machine_type = data.get("machine_type");
+      if (msg.kind === "machine") {
+        msg.machine_type = data.get("machine_type");
+        msg.interlocks = Number(data.get("interlocks"));
+      }
       if (data.get("power_entity")) msg.power_entity = data.get("power_entity");
       const save = form.querySelector("[type=submit]");
       save.disabled = true;

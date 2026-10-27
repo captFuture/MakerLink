@@ -14,7 +14,7 @@ esphome:
   project:
     # Wird von der MakerLink-Integration für die Auto-Discovery erkannt.
     name: makeraustria.makerlink_reader
-    version: "0.5.1"
+    version: "0.5.2"
 
 logger:
 

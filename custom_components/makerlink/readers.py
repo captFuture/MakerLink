@@ -210,6 +210,29 @@ class UnitFormError(ValueError):
         self.key = key
 
 
+def _apply_interlock_count(
+    data: dict[str, Any], count: Any, detected: Mapping[str, str]
+) -> None:
+    """Set 0, 1 or 2 safety switches. The firmware always offers two inputs, but an
+    unwired one reads as open, so they are only used when the user says they exist.
+    `count` None keeps what is configured (a different count rebuilds from the reader)."""
+    keys = (CONF_INTERLOCK_1, CONF_INTERLOCK_2)
+    if count is None:
+        return
+    count = int(count)
+    if not 0 <= count <= 2:
+        raise UnitFormError("invalid_interlocks")
+    if count == sum(1 for key in keys if data.get(key)):
+        return
+    for index, key in enumerate(keys):
+        if index >= count:
+            data.pop(key, None)
+        elif not data.get(key):
+            if not detected.get(key):
+                raise UnitFormError("no_interlock_entity")
+            data[key] = detected[key]
+
+
 def build_unit_data(
     form: Mapping[str, Any],
     current: Mapping[str, Any] | None = None,
@@ -218,8 +241,8 @@ def build_unit_data(
     """Merge a panel form into unit data (subentry data without the name).
 
     `current` is the stored data when editing. `detected` are the reader's entities
-    (classify_entities); they fill what is still missing, so switching door -> machine
-    brings the safety switches back.
+    (classify_entities); they fill what is still missing. Safety switches are only set
+    when `form["interlocks"]` (0-2) asks for them.
     """
     detected = detected or {}
     data: dict[str, Any] = dict(current or {})
@@ -249,9 +272,7 @@ def build_unit_data(
         data[CONF_PULSE_TIME] = float(form.get(CONF_PULSE_TIME) or data.get(CONF_PULSE_TIME) or DEFAULT_PULSE_TIME)
     else:
         data.pop(CONF_PULSE_TIME, None)
-        for key in (CONF_INTERLOCK_1, CONF_INTERLOCK_2):
-            if not data.get(key) and detected.get(key):
-                data[key] = detected[key]
+        _apply_interlock_count(data, form.get("interlocks"), detected)
         machine_type = form.get(CONF_MACHINE_TYPE) or data.get(CONF_MACHINE_TYPE) or "machine"
         if machine_type not in MACHINE_TYPES:
             raise UnitFormError("invalid_machine_type")
