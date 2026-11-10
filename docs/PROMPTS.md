@@ -476,3 +476,30 @@ Bestandsaufnahme: Aus dem ursprünglichen Phase-2-Umfang sind Interlock, Tür (d
 | `doorLockCheck` | `["True","Super User","Unlimited (0)"]` |
 
 Nicht getestet: `logDoorAccess&time=` (hätte einen echten Eintrag in `access_log` geschrieben). Die Testdatei kann `machineswitch.php` ersetzen.
+
+## 2026-11-10 – 0.6.0-Backend produktiv
+> ich habe machineswitch_test gelöscht
+
+Kontrolle: Die produktive `machineswitch.php` beantwortet `action=whitelist` (91 Karten), die Testdatei liefert 404. Damit ist das Backend für 0.6.0 live.
+
+## 2026-11-10 – 0.6.0 in HA
+> ja, spiel das HACS-Update ein
+
+MakerLink `b5712b3` (0.6.0) installiert, HA um 22:44 neu gestartet. Die Whitelist wurde beim Start automatisch geholt (91 Karten, 22:45:56, kein Fehler). Beide Einheiten haben `offline_allowed: false` (Maschinen-Standard). Keine neuen Fehler von MakerLink im Log.
+
+## 2026-11-10 – Offline-Test Teil 1: Start
+> Datei, Schalter und URL stehen, Karte gescannt – schau nach
+
+- 22:49:15 URL per „Neu konfigurieren“ auf `machineswitch_down.php` (simuliert 503). Die Einheit wurde einmal neu geladen, die Warnung zum Update-Listener kam **nicht** mehr: Fix aus 0.5.4 bestätigt.
+- 22:50:06 Scan: `checking` → Backend 503 → Log „backend down (HTTP 503: Simulierter Ausfall), starting offline session“ → `active`, Relais ein (22:50:07), Display `EIN:` / `Offline-Modus`, `session_offline: true`.
+
+## 2026-11-10 – Offline-Test Teil 2: Stop und Nachbuchung
+> Karte nochmal gescannt, URL zurückgestellt – schau nach
+> schau nach ob die Buchungen durch sind
+
+- Zwei Offline-Nutzungen (22:50:06–22:50:29 und 22:50:51–22:51:04). Beim Stop jeweils 503 → in die Queue, Relais aus, Status `message` („Server offline / Wird nachgebucht“), „Offene Buchungen“ 2.
+- 22:51:34 URL zurück auf `machineswitch.php` (Neuladen): Die 2 offenen Buchungen haben das Neuladen überstanden (persistent).
+- Danach: `pending_bookings` 0, im Log kein „queued stop … dropped“. Beide Nachbuchungen wurden also vom Backend angenommen (ein Fehler hätte den Eintrag in der Queue gelassen, eine 4xx-Ablehnung hätte einen ERROR geloggt).
+- Die direkte Gegenprobe in MARS (gleiche `offlineSession` nochmal → erwartet `already_stopped`) wurde vom Sicherheitsfilter blockiert, weil sie gegen die Produktiv-DB geht. Kann der User bei Bedarf selbst prüfen (machine_time, Unit 9998, Starts 1794347406 und 1794347451).
+- Kosmetik: Die Log-Zeilen sagten bei Offline-Sessions „stop of session None“. Jetzt „offline <start>“. Version 0.6.1.
+- Offline-Fallback 1c-A damit Ende zu Ende bestätigt.

@@ -536,6 +536,7 @@ class MachineController(UnitController):
             }
         else:
             item = {"key": key, "unit_id": self.unit_id, "type": self.machine_type, "end": end}
+        label = f"offline {item['start']}" if offline_rfid is not None else str(key)
         res: MarsResult | None
         queued = False
         try:
@@ -549,14 +550,14 @@ class MachineController(UnitController):
         except MarsError as err:
             res = None
             if err.permanent:
-                _LOGGER.error("%s: stop of session %s rejected: %s", self.name, key, err)
+                _LOGGER.error("%s: stop of session %s rejected: %s", self.name, label, err)
             else:
-                _LOGGER.warning("%s: stop of session %s failed, queued: %s", self.name, key, err)
+                _LOGGER.warning("%s: stop of session %s failed, queued: %s", self.name, label, err)
                 self.pending_stops.append(item)
                 queued = True
         else:
             if not res.ok:
-                _LOGGER.warning("%s: backend refused stop of %s: %s", self.name, key, res.msg)
+                _LOGGER.warning("%s: backend refused stop of %s: %s", self.name, label, res.msg)
         self.busy = ""
 
         duration = int(end - self.session_start) if self.session_start else None
