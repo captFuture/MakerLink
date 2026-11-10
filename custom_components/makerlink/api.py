@@ -82,7 +82,9 @@ class MarsApiClient:
         data = await self._get({"action": "doorLockCheck", "rfid": rfid})
         return DoorResult.from_json(data)
 
-    async def log_door(self, rfid: str, allowed: bool, unit_id: int) -> None:
+    async def log_door(
+        self, rfid: str, allowed: bool, unit_id: int, when: int | None = None
+    ) -> None:
         await self._get(
             {
                 "action": "logDoorAccess",
@@ -90,5 +92,29 @@ class MarsApiClient:
                 "status": "TRUE" if allowed else "FALSE",
                 "unitid": unit_id,
                 "check": 2,
+                "time": when,
             }
         )
+
+    async def whitelist(self) -> list[str]:
+        """Card UIDs of all active Unlimited members (offline fallback)."""
+        data = await self._get({"action": "whitelist"})
+        if not isinstance(data, dict) or not data.get("ok") or not isinstance(data.get("cards"), list):
+            raise MarsHttpError(200, "Ungueltige Whitelist-Antwort")
+        return [str(c) for c in data["cards"]]
+
+    async def offline_session(
+        self, rfid: str, unit_id: int, machine_type: str, start: int, end: int
+    ) -> MarsResult:
+        """Book a usage that was allowed while the backend was down."""
+        data = await self._get(
+            {
+                "action": "offlineSession",
+                "rfid": rfid,
+                "unitid": unit_id,
+                "type": machine_type,
+                "start": start,
+                "end": end,
+            }
+        )
+        return MarsResult.from_json(data)

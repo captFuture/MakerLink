@@ -49,10 +49,23 @@ class FakeApi:
 
     async def door_check(self, rfid):
         self.calls.append(("door_check", rfid))
+        if self.fail:
+            raise MarsConnectionError("down")
         return self.door_result
 
-    async def log_door(self, rfid, allowed, unit_id):
-        self.calls.append(("log_door", rfid, allowed, unit_id))
+    async def log_door(self, rfid, allowed, unit_id, when=None):
+        if when is None:
+            self.calls.append(("log_door", rfid, allowed, unit_id))
+        else:
+            self.calls.append(("log_door", rfid, allowed, unit_id, when))
+        if self.fail:
+            raise MarsConnectionError("down")
+
+    async def offline_session(self, rfid, unit_id, machine_type, start, end):
+        self.calls.append(("offline_session", rfid, unit_id, machine_type, start, end))
+        if self.fail:
+            raise MarsConnectionError("down")
+        return MarsResult(ok=True, msg="Gestoppt", cost=-1.0, balance=4.0)
 
 
 class FakeHw:
@@ -334,3 +347,123 @@ async def test_resend_display_after_reader_reboot():
     assert hw.lines == ("-MakerAustria-", "Verbinde...")
     await ctrl.resend_display()
     assert hw.lines == ("-MakerAustria-", "Karte bitte")
+
+
+# ----- offline fallback (Phase 1c-A) ---------------------------------------------------
+
+from custom_components.makerlink.mars_format import MarsAuthError  # noqa: E402
+from custom_components.makerlink.whitelist import Whitelist  # noqa: E402
+
+
+def make_whitelist(*cards):
+    wl = Whitelist()
+    wl.update(list(cards), now=500.0)
+    return wl
+
+
+def make_offline_machine(allowed=True, cards=(RFID,)):
+    ctrl, api, hw, events = make_machine()
+    ctrl.whitelist = make_whitelist(*cards)
+    ctrl.settings["offline_allowed"] = allowed
+    return ctrl, api, hw, events
+
+
+async def test_machine_offline_defaults_off():
+    ctrl, api, hw, _ = make_machine()
+    assert ctrl.offline_allowed is False
+
+
+async def test_offline_start_stop_and_later_booking():
+    ctrl, api, hw, events = make_offline_machine()
+    await ctrl.async_start()
+    api.fail = True
+    await ctrl.on_card(CARD)
+    assert ctrl.status == STATUS_ACTIVE and ctrl.session_offline and hw.power is True
+    assert hw.lines == ("EIN:", "Offline-Modus")
+    assert events[-1][1]["offline"] is True
+    await ticks(ctrl, 5)
+    await ctrl.on_card(CARD)
+    assert hw.power is False and not ctrl.session_active
+    assert ctrl.pending_stops == [
+        {"kind": "offline", "rfid": RFID, "unit_id": 1720, "type": "3dprint", "start": 1000, "end": 1000}
+    ]
+    api.fail = False
+    await ticks(ctrl, 60)
+    assert ctrl.pending_stops == []
+    assert api.calls[-1] == ("offline_session", RFID, 1720, "3dprint", 1000, 1000)
+
+
+async def test_offline_session_survives_restore():
+    ctrl, api, hw, _ = make_offline_machine()
+    await ctrl.async_start()
+    api.fail = True
+    await ctrl.on_card(CARD)
+    stored = ctrl.as_store()
+    again, api2, hw2, _ = make_offline_machine()
+    hw2.power = True
+    again.restore(stored)
+    await again.async_start()
+    assert again.session_offline and again.status == STATUS_ACTIVE
+
+
+@pytest.mark.parametrize(
+    ("allowed", "cards", "error"),
+    [
+        (True, ("0x1 0x2 0x3 0x4",), MarsConnectionError("down")),  # not on the whitelist
+        (False, (RFID,), MarsConnectionError("down")),  # unit does not allow offline
+        (True, (RFID,), MarsAuthError("Unauthorized")),  # wrong key is no outage
+        (True, (RFID,), MarsHttpError(400, "bad")),  # bad request is no outage
+    ],
+)
+async def test_offline_start_refused(allowed, cards, error):
+    ctrl, api, hw, _ = make_offline_machine(allowed, cards)
+    await ctrl.async_start()
+
+    async def failing_start(*_args):
+        raise error
+
+    api.start = failing_start
+    await ctrl.on_card(CARD)
+    assert not ctrl.session_active and hw.power is False
+
+
+async def test_door_opens_offline_and_logs_later():
+    import asyncio
+
+    api, hw = FakeApi(), FakeHw()
+    ctrl = DoorController(
+        name="Eingang", unit_id=1, api=api, hardware=hw, sleep=no_sleep,
+        settings={"pulse_time": 2}, clock=lambda: 1234.0, whitelist=make_whitelist(RFID),
+    )
+    assert ctrl.offline_allowed is True  # doors default on (Unlimited members)
+    await ctrl.async_start()
+    api.fail = True
+    await ctrl.on_card(CARD)
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert hw.switches == [True, False]
+    assert ctrl.pending_logs == [{"rfid": RFID, "allowed": True, "time": 1234}]
+    api.fail = False
+    await ticks(ctrl, 60)
+    assert ctrl.pending_logs == []
+    assert api.calls[-1] == ("log_door", RFID, True, 1, 1234)
+
+
+async def test_door_offline_unknown_card_stays_closed():
+    api, hw = FakeApi(), FakeHw()
+    ctrl = DoorController(
+        name="Eingang", unit_id=1, api=api, hardware=hw, sleep=no_sleep,
+        whitelist=make_whitelist("0x1 0x2 0x3 0x4"),
+    )
+    await ctrl.async_start()
+    api.fail = True
+    await ctrl.on_card(CARD)
+    assert hw.switches == []
+
+
+def test_whitelist_normalizes_and_roundtrips():
+    wl = make_whitelist(" 0xE7 0xF7 0x1B 0xA3 ", "", None)
+    assert "0xe7 0xf7 0x1b 0xa3" in wl and len(wl) == 1
+    again = Whitelist()
+    again.restore(wl.as_store())
+    assert again.cards == wl.cards and again.synced_at == 500.0

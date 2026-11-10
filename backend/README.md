@@ -9,6 +9,15 @@
 | `action=stop` ist idempotent | `UPDATE … WHERE machine_end IS NULL`. Ein wiederholter Stop (zB weil die Antwort verloren ging) liefert `{"ok":true,"msg":"Bereits gestoppt","already_stopped":true}` und rechnet nicht doppelt ab. Ist die Session geschlossen, aber noch nicht bezahlt (`paid` ≠ 1), wird die Abrechnung nachgeholt. |
 | Kein Standard-Key `CHANGEME` mehr | Fehlt `$config_mars_api_key`, ist er leer oder `CHANGEME`, wird jede Anfrage mit 500 abgelehnt (fail closed, plus Eintrag im PHP-Fehlerlog). Bisher galt dann `CHANGEME` als gültig, und der steht öffentlich im Code. Der Key wird zeitkonstant mit `hash_equals` verglichen. **Vor dem Deploy prüfen:** Ist euer echter Key wörtlich `CHANGEME`, erst einen neuen Key setzen (Server, Reader, MakerLink), sonst sind alle Reader ausgesperrt. |
 | SQL-Injection im `start`-Query behoben | `$rfid` wird jetzt mit `mysqli_real_escape_string` maskiert, wie schon in `doorLockCheck`. |
+| **Neu (MakerLink 0.6.0):** `action=whitelist` | UIDs aller aktiven Unlimited-Mitglieder für den Offline-Fallback. Mit X-MARS-Key und ohne Namen, anders als `query.php?action=getRFIDWhitelist`. |
+| **Neu (MakerLink 0.6.0):** `action=offlineSession` | Bucht eine während eines Serverausfalls freigegebene Nutzung nach. Idempotent über Mitglied und Startzeit, Abrechnung wie `stop` (gemeinsame Funktion `finishSession`). |
+| **Neu (MakerLink 0.6.0):** `logDoorAccess&time=` | Nachgemeldete Offline-Zutritte bekommen die echte Zeit. |
+
+### Test der 0.6.0-Erweiterung (wieder als `machineswitch_test.php`)
+1. `php -l machineswitch_test.php`
+2. `action=whitelist`: `ok:true`, `count` plausibel (gleich viele Einträge wie `getRFIDWhitelist`, abzüglich blockierter Mitglieder), keine Namen.
+3. `action=offlineSession` mit Testkarte, Unit 9998, `type=machine`, `start`/`end` vor wenigen Minuten: `Gestoppt`. Denselben Aufruf wiederholen: `already_stopped`.
+4. Start/Stop wie bisher (Regression). Dann über `machineswitch.php` kopieren.
 
 ## Deployment
 Die Datei wurde nie gegen einen PHP-Interpreter geprüft. Ein Syntaxfehler würde alle Reader gleichzeitig stilllegen, deshalb zuerst parallel testen:

@@ -9,7 +9,7 @@ Home-Assistant-Custom-Integration (HACS) für das MakerAustria-Maschinen- und T�
 - Keine Secrets ins Repo (Keys und Passwörter nur über `!secret` bzw. `config.inc.php`).
 
 ## Struktur
-- `custom_components/makerlink/`: Integration. `const.py`, `mars_format.py`, `display.py` und `controller.py` importieren **kein** `homeassistant`, damit sie lokal ohne HA testbar sind. Der HA-Glue liegt in `hub.py`.
+- `custom_components/makerlink/`: Integration. `const.py`, `mars_format.py`, `display.py`, `whitelist.py` und `controller.py` importieren **kein** `homeassistant`, damit sie lokal ohne HA testbar sind. Der HA-Glue liegt in `hub.py`.
 - `custom_components/makerlink/frontend/`: Seitenleisten-Panel (Vanilla-JS-Web-Component, kein Build-Schritt). Daten über `ws_api.py`.
 - `esphome/`: Referenz-Firmware für „dumme“ Reader. Bausteine in `common/` (Basis, Hardware pro Board, Display-Pakete). PN532 immer über HSU: `esphome/makerlink/pn532_hsu.h` (Arduino) bzw. `pn532_uart.h` (ESP-IDF, Zigbee). Der Inhalt von `esphome/` wird 1:1 nach `/config/esphome/` kopiert, die Include-Pfade setzen das voraus. Prüfen mit `esphome config`/`compile` aus PowerShell, nicht Git Bash.
 - `tests/`: pytest. Lokal läuft nur die Kernlogik, weil HA nicht unter Windows läuft.

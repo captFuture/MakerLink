@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable, Mapping
 from datetime import timedelta
 from typing import Any
@@ -53,12 +54,19 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
     SUBENTRY_UNIT,
+    WHITELIST_RETRY_INTERVAL,
+    WHITELIST_SYNC_INTERVAL,
 )
 from .controller import DoorController, MachineController, UnitController
+from .mars_format import MarsError
+from .whitelist import Whitelist
 
 _LOGGER = logging.getLogger(__name__)
 
 TICK = timedelta(seconds=1)
+WHITELIST_CHECK = timedelta(minutes=15)
+# Key of the hub's own data in the store (next to the per-unit entries).
+STORE_WHITELIST = "_whitelist"
 # Minimum seconds between two display resends of one unit (no loop if a reader rejects a text).
 DISPLAY_RESEND_MIN = 2.0
 
@@ -133,9 +141,13 @@ class MakerLinkHub:
         )
         self._unsubs: list[Callable[[], None]] = []
         self._ticking: set[str] = set()
+        self.whitelist = Whitelist()
+        self._whitelist_attempt = 0.0
+        self._whitelist_syncing = False
 
     async def async_setup(self) -> None:
         stored = await self._store.async_load() or {}
+        self.whitelist.restore(stored.get(STORE_WHITELIST))
         for subentry in self.entry.subentries.values():
             if subentry.subentry_type == SUBENTRY_UNIT:
                 saved = stored.get(subentry.subentry_id) or {}
@@ -148,12 +160,53 @@ class MakerLinkHub:
         self._unsubs.append(bus.async_listen(EVENT_READER_TAG, self._handle_reader_tag))
         self._unsubs.append(bus.async_listen(EVENT_TAG_SCANNED, self._handle_tag_scanned))
         self._unsubs.append(async_track_time_interval(self.hass, self._handle_tick, TICK))
+        self._unsubs.append(
+            async_track_time_interval(self.hass, self._handle_whitelist_check, WHITELIST_CHECK)
+        )
 
     async def async_start(self) -> None:
         """Reconcile controllers with current entity states (after platforms are set up)."""
         for unit in self.units.values():
             await unit.async_start()
         self._signal_update()
+        self._handle_whitelist_check(None)
+
+    # ----- offline whitelist -------------------------------------------------------
+
+    @callback
+    def _handle_whitelist_check(self, _now: Any) -> None:
+        """Sync weekly; after a failure (or without any list) retry hourly."""
+        now = time.time()
+        if self.whitelist.loaded and self.whitelist.last_error is None:
+            due = now - (self.whitelist.synced_at or 0) >= WHITELIST_SYNC_INTERVAL
+        else:
+            due = now - self._whitelist_attempt >= WHITELIST_RETRY_INTERVAL
+        if due:
+            self.entry.async_create_background_task(
+                self.hass, self.async_sync_whitelist(), "makerlink_whitelist_sync"
+            )
+
+    async def async_sync_whitelist(self) -> bool:
+        """Fetch the offline whitelist from the backend; keeps the old list on failure."""
+        if self._whitelist_syncing:
+            return False
+        self._whitelist_syncing = True
+        self._whitelist_attempt = time.time()
+        try:
+            cards = await self.api.whitelist()
+        except MarsError as err:
+            self.whitelist.last_error = str(err) or type(err).__name__
+            _LOGGER.warning("Offline whitelist sync failed (keeping %d cards): %s",
+                            len(self.whitelist), err)
+            return False
+        finally:
+            self._whitelist_syncing = False
+            self._signal_update()
+        self.whitelist.update(cards, time.time())
+        _LOGGER.info("Offline whitelist synced: %d cards", len(self.whitelist))
+        self._schedule_save()
+        self._signal_update()
+        return True
 
     async def async_unload(self) -> None:
         for unsub in self._unsubs:
@@ -175,13 +228,14 @@ class MakerLinkHub:
             "hardware": hardware,
             "fire_event": self._fire_event,
             "save": self._schedule_save,
+            "whitelist": self.whitelist,
         }
         unit: UnitController
         if data[CONF_KIND] == KIND_DOOR:
             unit = DoorController(
                 settings={"pulse_time": data.get(CONF_PULSE_TIME, DEFAULT_PULSE_TIME)}, **common
             )
-            unit.settings.update(stored.get("settings") or {})
+            unit.restore(stored)
         else:
             unit = MachineController(
                 machine_type=data[CONF_MACHINE_TYPE],
@@ -324,6 +378,7 @@ class MakerLinkHub:
             "reader_online": self._reader_online(sub_id),
             "reader_device_id": subentry.data[CONF_READER_DEVICE],
             "device_id": device.id if device else None,
+            "offline_allowed": unit.offline_allowed,
         }
         if isinstance(unit, MachineController):
             snapshot.update(
@@ -331,6 +386,7 @@ class MakerLinkHub:
                     "machine_type": unit.machine_type,
                     "admin": unit.admin,
                     "session_active": unit.session_active,
+                    "session_offline": unit.session_offline,
                     "session_start": unit.session_start,
                     "user": unit.last_user or None,
                     "shutdown_remaining": unit.shutdown_counter,
@@ -341,6 +397,7 @@ class MakerLinkHub:
             )
         elif isinstance(unit, DoorController):
             snapshot["last_allowed"] = unit.last_allowed
+            snapshot["pending_bookings"] = len(unit.pending_logs)
         return snapshot
 
     # ----- events ------------------------------------------------------------------
@@ -386,4 +443,8 @@ class MakerLinkHub:
         self._store.async_delay_save(self._data_to_save, 1)
 
     def _data_to_save(self) -> dict[str, Any]:
-        return {sub_id: {**unit.as_store(), "kind": unit.kind} for sub_id, unit in self.units.items()}
+        data: dict[str, Any] = {
+            sub_id: {**unit.as_store(), "kind": unit.kind} for sub_id, unit in self.units.items()
+        }
+        data[STORE_WHITELIST] = self.whitelist.as_store()
+        return data

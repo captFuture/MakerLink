@@ -43,6 +43,14 @@ MESSAGE_TIME = 3
 STOP_SCREEN_TIME = 5
 DOOR_LOG_DELAY = 2.0
 
+# Offline fallback (Phase 1c-A): whitelist of Unlimited members from the backend.
+WHITELIST_SYNC_INTERVAL = 7 * 24 * 3600  # weekly (user decision 2026-11-10)
+WHITELIST_RETRY_INTERVAL = 3600  # after a failed sync
+# Setting key per unit; machines default off, doors default on (Unlimited members
+# have no time restriction, see docs/PLAN.md section 4).
+SETTING_OFFLINE = "offline_allowed"
+DEFAULT_OFFLINE_BY_KIND = {"machine": False, "door": True}
+
 # Events
 EVENT_READER_TAG = "esphome.makerlink_tag"
 EVENT_TAG_SCANNED = "tag_scanned"

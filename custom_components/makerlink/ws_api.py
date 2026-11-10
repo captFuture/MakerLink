@@ -40,6 +40,7 @@ from .const import (
     DOMAIN,
     KINDS,
     MACHINE_TYPES,
+    SETTING_OFFLINE,
     SIGNAL_UPDATE,
     SUBENTRY_UNIT,
     TEST_UNIT_ID,
@@ -55,7 +56,7 @@ from .readers import (
     valid_devicename,
 )
 
-ACTIONS = ["stop_session", "open_door", "out_of_order", "admin"]
+ACTIONS = ["stop_session", "open_door", "out_of_order", "admin", "offline"]
 IDENTIFY_SECONDS = 10
 SUBSCRIBE_DEBOUNCE = 1.0  # seconds between two snapshots sent to one panel
 
@@ -67,6 +68,7 @@ def async_setup(hass: HomeAssistant) -> None:
         ws_units,
         ws_subscribe,
         ws_action,
+        ws_whitelist_sync,
         ws_options,
         ws_reader_yaml,
         ws_identify,
@@ -89,9 +91,12 @@ def _snapshot(hass: HomeAssistant) -> dict[str, Any]:
     units = [hub.unit_snapshot(sub_id) for hub in _hubs(hass) for sub_id in list(hub.units)]
     units.sort(key=lambda u: (u["kind"], u["name"].lower()))
     entries = hass.config_entries.async_entries(DOMAIN)
+    hubs = _hubs(hass)
     return {
         "units": units,
         "configured": bool(entries),
+        # Offline fallback: size and age of the Unlimited whitelist (no card numbers).
+        "whitelist": hubs[0].whitelist.info() if hubs else None,
         # Onboarding: readers without a unit, and ESPHome devices still waiting for the
         # "Add" confirmation in the ESPHome integration.
         "readers": discovery.find_readers(hass, entries),
@@ -179,6 +184,8 @@ async def ws_action(
     value = msg.get("value", True)
     if action == "out_of_order":
         await unit.set_setting("out_of_order", value)
+    elif action == "offline":
+        await unit.set_setting(SETTING_OFFLINE, value)
     elif action == "stop_session" and isinstance(unit, MachineController):
         await unit.stop_session("panel")
     elif action == "admin" and isinstance(unit, MachineController):
@@ -191,6 +198,21 @@ async def ws_action(
         )
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "makerlink/whitelist_sync"})
+@websocket_api.async_response
+async def ws_whitelist_sync(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Fetch the offline whitelist now (panel button)."""
+    hubs = _hubs(hass)
+    if not hubs:
+        connection.send_error(msg["id"], "not_configured", "MakerLink is not set up")
+        return
+    ok = await hubs[0].async_sync_whitelist()
+    connection.send_result(msg["id"], {"ok": ok, **hubs[0].whitelist.info()})
 
 
 # ----- onboarding ---------------------------------------------------------------------

@@ -422,3 +422,40 @@ Alle Erwartungen aus `backend/README.md` sind erfüllt. Die Testdatei kann `mach
 **Nebenbei:**
 - Der MARS-Server war über den Tailscale-Exit-Node `arnolaptop` nicht erreichbar: Er steht im Makerspace hinter derselben öffentlichen IP, und der Weg zur eigenen öffentlichen IP klappt dort nicht. Exit-Node für den Test kurz abgeschaltet (mit Zustimmung des Users) und danach wiederhergestellt.
 - Neue HA-Warnung „has an update listener and should use it for scheduling a reload“ (wird in HA 2026.12 zum Fehler). Behoben: Der Reconfigure-Flow nutzt jetzt `async_update_and_abort`, der Update-Listener `async_schedule_reload`. Kommt mit 0.5.4.
+
+## 2026-11-10 – 0.5.4 ausgerollt
+> ist gepusht, spiel das HACS-Update ein
+
+MakerLink `10acc85` (0.5.4) per HACS installiert, HA um 21:30 neu gestartet. Danach erzeugt die Einheiten-Abfrage keine `async_get_device`-Warnung mehr, und `device_id` wird weiter aufgelöst. Ob die Warnung zum Update-Listener weg ist, zeigt sich erst beim nächsten „Neu konfigurieren“.
+
+## 2026-11-10 – Backend-Patch produktiv
+> ich habe alles bei mir erledigt :)
+
+- Der User hat `machineswitch_test.php` über `machineswitch.php` kopiert, die Testdatei gelöscht und die URL in MakerLink zurückgestellt.
+- Kontrolle: 21:32:21 Start → aktiv, Relais ein; 21:32:29 Stop → idle, Relais aus. Reader 9998 funktioniert gegen die produktive, gepatchte Datei.
+- Die URL wurde um 21:28:53 umgestellt, also noch mit 0.5.3 (0.5.4 lief ab 21:30). Der Fix zum Update-Listener ist damit noch nicht im Betrieb bestätigt. Das geht erst beim nächsten „Neu konfigurieren“.
+
+## 2026-11-10 – Phase 2 / Start Phase 1c (Offline-Fallback)
+> wir hatten im ursprungsplan features für "phase 2"
+
+Bestandsaufnahme: Aus dem ursprünglichen Phase-2-Umfang sind Interlock, Tür (doorLockCheck/logDoorAccess), Kaffeemaschine (Unit 6) und „Neustart beendet Nutzung“ bereits umgesetzt. Offen sind Statistiken, ein Diagnose-Dashboard und die Kiln-Spezialfälle (noch nicht definiert). Phase 1c (Offline-Fallback, MVP) fehlt komplett.
+
+**Entscheidungen des Users:**
+- Weiter mit **Phase 1c**.
+- Umfang: **erst A** (MARS bzw. Internet weg, HA entscheidet), **dann B** (HA weg, Reader entscheidet).
+- Offline-Start ohne Guthabenprüfung: **pro Einheit einstellbar** (Standard aus).
+- Kartenliste: > Nur Unlimited User, wöchentlich > man kann sie von http://makeradmin.ddns.net:8080/crm/api/query.php?action=getRFIDWhitelist holen
+- Türen: > Nur unlimited user > http://makeradmin.ddns.net:8080/crm/api/query.php?action=getRFIDWhitelist diese haben keine zeiteinschränkung
+
+**Sicherheitsbefund:** `query.php?action=getRFIDWhitelist` antwortet **ohne Authentifizierung** über HTTP aus dem Internet und liefert Vor- und Nachname, Tarif und Karten-UID aller Unlimited-Mitglieder. Mit den UIDs lassen sich Karten klonen (MIFARE-UIDs sind kopierbar), die Tür lässt sich damit öffnen. Zudem ein DSGVO-Problem. Empfehlung: Endpunkt absichern oder entfernen. MakerLink soll die Liste nur über einen Endpunkt mit X-MARS-Key holen. (Nur eine Probe abgerufen, nichts gespeichert.)
+
+## 2026-11-10 – Entscheidungen zur Whitelist, Umsetzung 1c-A
+> Whitelist reicht einstweilen (wir implementieren das dann später mit schulung - merk dir das)
+> Neue Aktion in machineswitch.php (Empfohlen)
+> (Code von `getRFIDWhitelist` aus `query.php`: Plan-IDs 12,13,14,15,16,19,20,50,51,52,53, aktive Mitgliedschaft/Karte, nicht gelöscht)
+
+**Umgesetzt (0.6.0), siehe PLAN.md Abschnitt 4:**
+- Backend: `action=whitelist` (nur UIDs, X-MARS-Key, zusätzlich ohne blockierte Mitglieder), `action=offlineSession` (idempotent über Mitglied und Startzeit, Abrechnung über die gemeinsame Funktion `finishSession`), `logDoorAccess&time=`.
+- Integration: `whitelist.py` (HA-frei), Sync beim Start und wöchentlich (stündlicher Retry nach Fehlern), Panel zeigt Whitelist-Stand und „Jetzt synchronisieren“. Neuer Schalter „Offline erlauben“ pro Einheit (Maschine Standard aus, Tür Standard an). Offline-Session im Controller, Nachbuchung über die bestehende Queue, Tür-Protokoll persistent gepuffert.
+- 10 neue Tests, insgesamt 84 grün. PHP nicht lokal geprüft (kein PHP installiert), `php -l` steht im Test-Ablauf in `backend/README.md`.
+- Die spätere Schulungsprüfung ist im Memory und in PLAN.md vermerkt.

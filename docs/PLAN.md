@@ -139,16 +139,26 @@ Der Weg vom Flashen bis zur Einheit ist auf vier Schritte reduziert, alle gefüh
 - **Offen / ungeprüft:** Hersteller/Modell, die HA aus dem ESPHome-Projektnamen ableitet, sind aus dem HA-Quellcode erinnert, nicht an einer echten Instanz bestätigt. Config-Flow-Tests für den neuen Weg fehlen noch (nur die reine Logik ist getestet).
 
 ## 4. Offline-Fallback (Phase 1c)
-- **Backend:** `action=trainedCards&unitid=X` liefert gehashte UIDs (`sha256(salt + mars_uid)` gekürzt auf 8 Byte). `action=offlineSession&rfid&unitid&type&start&end&offline_id` rechnet idempotent ab.
-- **Integration:** Synchronisiert die Kartenliste stündlich, beim Start und per Button (gechunkt per ESPHome-Action). Gepufferte Sessions werden per Event angenommen, nachverrechnet und quittiert.
-- **Firmware:** Offline heißt kein Heartbeat seit 60 s. Bei einem Hash-Treffer schaltet der Reader selbst, puffert Karte, Start und Ende im Flash und zeigt „OFFLINE“.
-- **Sicherheit:** SQL-Injection im `start`-Query ist bereits in `backend/machineswitch.php` behoben.
+Zwei Ausfälle, zwei Stufen (Entscheidung 2026-11-10):
+
+**1c-A: MARS-Server bzw. Internet weg, HA läuft (umgesetzt in 0.6.0)**
+- **Backend:** `action=whitelist` liefert die UIDs aller aktiven Unlimited-Mitglieder (ohne Namen, mit X-MARS-Key). `action=offlineSession` bucht nach, idempotent über Mitglied und Startzeit. `logDoorAccess` nimmt optional `time`.
+- **Integration:** Die Whitelist wird beim Start und **wöchentlich** synchronisiert (nach einem Fehler stündlich neu versucht), dazu gibt es „Jetzt synchronisieren“ im Panel. Sie liegt im HA-Store. Bei einem **Ausfall** (Verbindungsfehler, Timeout, 5xx; **nicht** bei 401 oder 4xx) und einer Karte auf der Whitelist gilt:
+  - **Maschine:** nur mit „Offline erlauben“ (pro Einheit, Standard **aus**). Start ohne Guthabenprüfung, Display `EIN:` / `Offline-Modus`. Beim Stop `offlineSession`; geht das nicht, kommt der Eintrag in die bestehende Queue (Retry alle 60 s).
+  - **Tür:** „Offline erlauben“ Standard **an** (Unlimited-Mitglieder haben keine Zeitfenster). Öffnet, Display `WILLKOMMEN` / `Offline`. Das Zutrittsprotokoll wird mit der echten Zeit nachgemeldet und persistent gepuffert.
+- **Bewusst noch nicht:** Schulungsprüfung offline. Vorerst darf jedes Unlimited-Mitglied jede Maschine mit „Offline erlauben“ nutzen. Laut User wird das später mit `schulung` nachgerüstet (`trainedCards`).
+- **Datenschutz:** Die Whitelist (nur UIDs) liegt in `.storage/makerlink.<entry_id>` auf dem HA-Host.
+
+**1c-B: HA selbst weg (offen)**
+- **Firmware:** Offline heißt kein Heartbeat seit 60 s. Der Reader prüft gegen gehashte UIDs (`sha256(salt + mars_uid)`, gekürzt auf 8 Byte, per ESPHome-Action gechunkt übertragen), schaltet selbst, puffert Karte, Start und Ende im Flash und zeigt „OFFLINE“. Gepufferte Nutzungen werden per Event gemeldet, über `offlineSession` nachgebucht und quittiert. Geht nur mit dem Relais am Reader, nicht mit externen Steckdosen.
+
+- **Sicherheit:** SQL-Injection im `start`-Query ist bereits in `backend/machineswitch.php` behoben. **Offen:** `query.php?action=getRFIDWhitelist` ist ohne Authentifizierung aus dem Internet erreichbar (Namen und UIDs).
 
 ## 5. Phasen
 1. **Phase 1a – Kern:** api, mars_format, display, Controller (Maschine + Tür), Hub- und Subentry-Flow, Entitäten, externe Steckdosen, Interlock, Referenz-Firmware ohne Offline. Tests.
 2. **Phase 1b – Discovery:** umgesetzt als Onboarding im Panel (3.6, v0.5.0).
-3. **Phase 1c – Offline:** Backend-Patch, offline.py, Firmware-Erweiterung.
-4. **Phase 2:** Diagnose-Dashboards, Statistiken, Kiln-Spezialfälle.
+3. **Phase 1c – Offline:** 1c-A (HA entscheidet bei Serverausfall) umgesetzt in 0.6.0; 1c-B (Firmware, HA weg) offen.
+4. **Phase 2:** Diagnose-Dashboards, Statistiken, Kiln-Spezialfälle (noch zu definieren). Bereits in Phase 1 erledigt: Interlock, Tür, Kaffeemaschine, Verhalten bei HA-Neustart.
 
 ### Stand (2026-10-18)
 - **Phase 1a umgesetzt (v0.2.0, ungetestet in echtem HA):**
@@ -161,6 +171,12 @@ Der Weg vom Flashen bis zur Einheit ist auf vier Schritte reduziert, alle gefüh
 - **Noch offen in 1a:** Config-Flow-Tests mit `pytest-homeassistant-custom-component` und ein E2E-Test auf echter Hardware.
 - **v0.5.0 (2026-10-27):** Onboarding im Panel (Abschnitt 3.6): YAML-Generator, „Neue Reader“, Einrichten/Bearbeiten/Entfernen, Maschine ↔ Tür, Identifizieren.
 - **Nächste Schritte:** Test von 3.6 in echtem HA, danach Phase 1c (Offline inklusive Backend-Patch).
+
+### Stand (2026-11-10)
+- **Erster Ende-zu-Ende-Test** mit echtem Reader (9998, remote über Tailscale) und echtem MARS: Start, Stop, Display und Relais funktionieren.
+- **Backend-Patch** (`end`, idempotenter Stop, SQL-Fix, kein `CHANGEME`) produktiv, mit Testdatei geprüft (inklusive Doppel-Stop).
+- **0.5.3/0.5.4:** Fix, durch den das offene Panel HA einfror (Snapshots gebündelt, Discovery nur über ESPHome-Geräte). Veraltete HA-Schnittstellen ersetzt (Geräte-Lookup, Reload über den Update-Listener).
+- **0.6.0:** Phase 1c-A, Offline-Fallback bei Serverausfall (Abschnitt 4). Backend-Erweiterung muss noch auf den Server.
 
 ## 6. Verifikation
 - **Unit-Tests** (lokal, ohne HA): UID-Format, Response-Parsing, Display, Zustandsautomat mit Fake-API und Fake-Hardware.

@@ -158,6 +158,9 @@
       },
       "admin": {
         "name": "Admin-Modus"
+      },
+      "offline_allowed": {
+        "name": "Offline erlauben"
       }
     },
     "number": {

@@ -42,6 +42,15 @@ const TEXT = {
     summaryOoo: "außer Betrieb",
     summaryOffline: "offline",
     summaryPending: "offene Buchungen",
+    whitelist: "Offline-Whitelist",
+    cards: "Karten",
+    syncedAt: "Stand",
+    never: "nie",
+    syncNow: "Jetzt synchronisieren",
+    syncFailed: "Sync fehlgeschlagen",
+    offlineAllowed: "Offline erlauben",
+    mode: "Modus",
+    offlineSession: "Offline gestartet, wird nachgebucht",
     addReader: "Reader hinzufügen",
     newReaders: "Neue Reader",
     newReadersHint: "Diese Reader sind in Home Assistant angemeldet, aber noch keiner Maschine oder Tür zugeordnet.",
@@ -150,6 +159,15 @@ const TEXT = {
     summaryOoo: "out of order",
     summaryOffline: "offline",
     summaryPending: "pending bookings",
+    whitelist: "Offline whitelist",
+    cards: "cards",
+    syncedAt: "as of",
+    never: "never",
+    syncNow: "Sync now",
+    syncFailed: "sync failed",
+    offlineAllowed: "Allow offline",
+    mode: "Mode",
+    offlineSession: "Started offline, booked later",
     addReader: "Add reader",
     newReaders: "New readers",
     newReadersHint: "These readers are registered in Home Assistant but not assigned to a machine or door yet.",
@@ -330,6 +348,7 @@ class MakerLinkPanel extends HTMLElement {
     this._units = msg.units || [];
     this._readers = msg.readers || [];
     this._esphomePending = msg.esphome_pending || [];
+    this._whitelist = msg.whitelist || null;
     this._configured = msg.configured !== false;
     this._loaded = true;
     this._error = null;
@@ -470,7 +489,37 @@ class MakerLinkPanel extends HTMLElement {
     ];
     return `<div class="summary">${chips
       .map(([n, label, color]) => `<span class="chip ${n ? "" : "muted"}" style="--chip:${color}"><b>${n}</b> ${esc(label)}</span>`)
-      .join("")}</div>`;
+      .join("")}${this._renderWhitelist()}</div>`;
+  }
+
+  // Offline fallback: size and age of the Unlimited whitelist, sync button for admins.
+  _renderWhitelist() {
+    const t = this._t;
+    const w = this._whitelist;
+    if (!w) return "";
+    const when = w.synced_at ? new Date(w.synced_at * 1000).toLocaleString() : t.never;
+    const bad = !w.synced_at || w.error;
+    const text = `${t.whitelist}: ${w.count} ${t.cards} · ${t.syncedAt} ${when}${w.error ? ` · ${t.syncFailed}` : ""}`;
+    const button = this._admin
+      ? `<button class="link" data-ui="whitelist_sync" ${this._busy.has("whitelist") ? "disabled" : ""}>${esc(t.syncNow)}</button>`
+      : "";
+    return `<span class="chip ${bad ? "" : "muted"}" style="--chip:var(--warning-color, #ffa600)" title="${esc(w.error || "")}">${esc(text)}</span>${button}`;
+  }
+
+  async _syncWhitelist() {
+    if (this._busy.has("whitelist")) return;
+    this._busy.add("whitelist");
+    this._render();
+    try {
+      const res = await this._hass.callWS({ type: "makerlink/whitelist_sync" });
+      this._whitelist = res;
+      if (!res.ok) this._error = `${this._t.syncFailed}: ${res.error || ""}`;
+    } catch (err) {
+      this._error = err?.message || String(err);
+    } finally {
+      this._busy.delete("whitelist");
+      this._render();
+    }
   }
 
   _renderUnit(u) {
@@ -482,6 +531,7 @@ class MakerLinkPanel extends HTMLElement {
 
     if (isMachine) {
       if (u.user && (u.session_active || u.shutdown_remaining > 0)) rows.push([t.user, esc(u.user)]);
+      if (u.session_offline) rows.push([t.mode, `<span class="bad">${esc(t.offlineSession)}</span>`]);
       if (u.session_active && u.session_start) {
         rows.push([t.runtime, `<span data-start="${u.session_start}">–</span>`]);
       }
@@ -520,6 +570,7 @@ class MakerLinkPanel extends HTMLElement {
       actions.push(`<button class="primary" data-action="open_door" data-unit="${esc(u.id)}" ${busy("open_door")}>${esc(t.openDoor)}</button>`);
     }
     actions.push(this._toggle(u, "out_of_order", t.outOfOrder, u.out_of_order, false));
+    actions.push(this._toggle(u, "offline", t.offlineAllowed, u.offline_allowed, false));
     if (this._admin) {
       actions.push(`<button class="ghost" data-ui="edit" data-unit="${esc(u.id)}">${esc(t.edit)}</button>`);
     }
@@ -568,6 +619,7 @@ class MakerLinkPanel extends HTMLElement {
     else if (d.ui === "setup") this._openUnitForm({ reader: this._readers.find((r) => r.device_id === d.reader) });
     else if (d.ui === "edit") this._openUnitForm({ unit: this._units.find((u) => u.id === d.unit) });
     else if (d.ui === "identify") this._identify(d.reader);
+    else if (d.ui === "whitelist_sync") this._syncWhitelist();
   }
 
   _fail(err) {

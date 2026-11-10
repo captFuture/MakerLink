@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from .const import (
     CARD_COOLDOWN,
     DEFAULT_MIN_BALANCE,
+    DEFAULT_OFFLINE_BY_KIND,
     DEFAULT_PULSE_TIME,
     DEFAULT_SHUTDOWN_TIME,
     DOOR_LOG_DELAY,
@@ -26,10 +27,12 @@ from .const import (
     KIND_DOOR,
     KIND_MACHINE,
     MESSAGE_TIME,
+    SETTING_OFFLINE,
     STOP_SCREEN_TIME,
 )
 from .display import View, render
-from .mars_format import DoorResult, MarsError, MarsResult, uid_to_mars
+from .mars_format import DoorResult, MarsAuthError, MarsError, MarsResult, uid_to_mars
+from .whitelist import Whitelist
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +73,13 @@ class MarsApi(Protocol):
 
     async def door_check(self, rfid: str) -> DoorResult: ...
 
-    async def log_door(self, rfid: str, allowed: bool, unit_id: int) -> None: ...
+    async def log_door(
+        self, rfid: str, allowed: bool, unit_id: int, when: int | None = None
+    ) -> None: ...
+
+    async def offline_session(
+        self, rfid: str, unit_id: int, machine_type: str, start: int, end: int
+    ) -> MarsResult: ...
 
 
 class Hardware(Protocol):
@@ -107,12 +116,18 @@ class UnitController:
         save: Callable[[], None] | None = None,
         clock: Callable[[], float] = time.time,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        whitelist: Whitelist | None = None,
     ) -> None:
         self.name = name
         self.unit_id = unit_id
         self.api = api
         self.hw = hardware
-        self.settings: dict[str, Any] = {"out_of_order": False, **(settings or {})}
+        self.whitelist = whitelist
+        self.settings: dict[str, Any] = {
+            "out_of_order": False,
+            SETTING_OFFLINE: DEFAULT_OFFLINE_BY_KIND.get(self.kind, False),
+            **(settings or {}),
+        }
         self._fire = fire_event or (lambda _event, _data: None)
         self._save = save or (lambda: None)
         self._clock = clock
@@ -154,9 +169,31 @@ class UnitController:
         """State to persist across restarts."""
         return {"settings": dict(self.settings)}
 
+    def restore(self, data: dict[str, Any]) -> None:
+        """Restore persisted state."""
+        self.settings.update(data.get("settings") or {})
+
     @property
     def out_of_order(self) -> bool:
         return bool(self.settings.get("out_of_order"))
+
+    @property
+    def offline_allowed(self) -> bool:
+        return bool(self.settings.get(SETTING_OFFLINE))
+
+    def _offline_ok(self, rfid: str, err: MarsError) -> bool:
+        """May this card be accepted although the backend failed?
+
+        Only for an outage (connection error, timeout, 5xx), never for a rejected key
+        or a bad request, and only for cards on the offline whitelist.
+        """
+        return (
+            not err.permanent
+            and not isinstance(err, MarsAuthError)
+            and self.offline_allowed
+            and self.whitelist is not None
+            and rfid in self.whitelist
+        )
 
     async def set_setting(self, key: str, value: Any) -> None:
         self.settings[key] = value
@@ -265,6 +302,8 @@ class MachineController(UnitController):
         self.settings.setdefault("admin", False)
 
         self.session_key: int | None = None
+        # Card of a session started from the offline whitelist (no backend key yet).
+        self.offline_rfid: str | None = None
         self.session_start: float | None = None
         self.shutdown_counter = 0
         self.stop_screen = 0
@@ -282,6 +321,7 @@ class MachineController(UnitController):
         return {
             **super().as_store(),
             "session_key": self.session_key,
+            "offline_rfid": self.offline_rfid,
             "session_start": self.session_start,
             "user": self.last_user,
             "pending_stops": list(self.pending_stops),
@@ -291,6 +331,7 @@ class MachineController(UnitController):
         """Restore persisted state; reconciled once the power state is known."""
         self.settings.update(data.get("settings") or {})
         self.session_key = data.get("session_key")
+        self.offline_rfid = data.get("offline_rfid")
         self.session_start = data.get("session_start")
         self.last_user = data.get("user") or ""
         self.pending_stops = list(data.get("pending_stops") or [])
@@ -314,7 +355,12 @@ class MachineController(UnitController):
 
     @property
     def session_active(self) -> bool:
-        return self.session_key is not None
+        return self.session_key is not None or self.offline_rfid is not None
+
+    @property
+    def session_offline(self) -> bool:
+        """The running session was started from the offline whitelist."""
+        return self.offline_rfid is not None
 
     @property
     def status(self) -> str:
@@ -338,6 +384,7 @@ class MachineController(UnitController):
         return (
             *super()._fingerprint(),
             self.session_key,
+            self.offline_rfid,
             self.last_cost,
             self.last_balance,
             len(self.pending_stops),
@@ -392,8 +439,12 @@ class MachineController(UnitController):
                 rfid, self.unit_id, self.machine_type, float(self.settings["min_balance"])
             )
         except MarsError as err:
-            _LOGGER.warning("%s: start failed: %s", self.name, err)
             self.busy = ""
+            if self._offline_ok(rfid, err):
+                _LOGGER.warning("%s: backend down (%s), starting offline session", self.name, err)
+                await self._start_offline(rfid)
+                return
+            _LOGGER.warning("%s: start failed: %s", self.name, err)
             self._reject(rfid, str(err), ("FEHLER", err.display))
             await self._power_off_if_idle()
             return
@@ -428,6 +479,27 @@ class MachineController(UnitController):
             self._reject(rfid, res.msg or "Abgelehnt", ("ABGELEHNT", res.msg or "Abgelehnt"))
             await self._power_off_if_idle()
 
+    async def _start_offline(self, rfid: str) -> None:
+        """Backend down, card on the whitelist: run the session locally, book it later."""
+        self.offline_rfid = rfid
+        self.session_start = self._clock()
+        self.last_user = "Offline-Modus"
+        self.shutdown_counter = 0
+        self.message = None
+        await self._set_power(True)
+        self._save()
+        self._fire(
+            EVENT_SESSION_STARTED,
+            {
+                "unit": self.name,
+                "unit_id": self.unit_id,
+                "key": None,
+                "user": self.last_user,
+                "machine_type": self.machine_type,
+                "offline": True,
+            },
+        )
+
     async def _power_off_if_idle(self) -> None:
         if not self.session_active and self.shutdown_counter == 0 and self.hw.power_state():
             await self._set_power(False)
@@ -448,23 +520,39 @@ class MachineController(UnitController):
 
     async def _stop(self, reason: str, immediate: bool = False) -> None:
         key = self.session_key
-        assert key is not None
+        offline_rfid = self.offline_rfid
+        assert key is not None or offline_rfid is not None
         end = int(self._clock())
         self.busy = "Stop..."
         await self._refresh()
+        if offline_rfid is not None:
+            item: dict[str, Any] = {
+                "kind": "offline",
+                "rfid": offline_rfid,
+                "unit_id": self.unit_id,
+                "type": self.machine_type,
+                "start": int(self.session_start or end),
+                "end": end,
+            }
+        else:
+            item = {"key": key, "unit_id": self.unit_id, "type": self.machine_type, "end": end}
         res: MarsResult | None
         queued = False
         try:
-            res = await self.api.stop(key, self.unit_id, self.machine_type)
+            if offline_rfid is not None:
+                res = await self.api.offline_session(
+                    offline_rfid, self.unit_id, self.machine_type, item["start"], end
+                )
+            else:
+                assert key is not None
+                res = await self.api.stop(key, self.unit_id, self.machine_type)
         except MarsError as err:
             res = None
             if err.permanent:
                 _LOGGER.error("%s: stop of session %s rejected: %s", self.name, key, err)
             else:
                 _LOGGER.warning("%s: stop of session %s failed, queued: %s", self.name, key, err)
-                self.pending_stops.append(
-                    {"key": key, "unit_id": self.unit_id, "type": self.machine_type, "end": end}
-                )
+                self.pending_stops.append(item)
                 queued = True
         else:
             if not res.ok:
@@ -473,6 +561,7 @@ class MachineController(UnitController):
 
         duration = int(end - self.session_start) if self.session_start else None
         self.session_key = None
+        self.offline_rfid = None
         self.session_start = None
         self.settings["admin"] = False
         self.last_cost = res.cost if res else None
@@ -506,6 +595,7 @@ class MachineController(UnitController):
                 "balance": self.last_balance,
                 "duration_s": duration,
                 "billed": res is not None and res.ok,
+                "offline": offline_rfid is not None,
             },
         )
 
@@ -513,15 +603,23 @@ class MachineController(UnitController):
         """Try to book stops that failed while the backend was unreachable."""
         remaining = []
         for item in self.pending_stops:
+            label = item.get("key") or f"offline {item.get('start')}"
             try:
-                res = await self.api.stop(item["key"], item["unit_id"], item["type"], item["end"])
+                if item.get("kind") == "offline":
+                    res = await self.api.offline_session(
+                        item["rfid"], item["unit_id"], item["type"], item["start"], item["end"]
+                    )
+                else:
+                    res = await self.api.stop(
+                        item["key"], item["unit_id"], item["type"], item["end"]
+                    )
             except MarsError as err:
                 if err.permanent:
-                    _LOGGER.error("%s: queued stop %s dropped: %s", self.name, item["key"], err)
+                    _LOGGER.error("%s: queued stop %s dropped: %s", self.name, label, err)
                 else:
                     remaining.append(item)
                 continue
-            _LOGGER.info("%s: queued stop %s booked: %s", self.name, item["key"], res.msg)
+            _LOGGER.info("%s: queued stop %s booked: %s", self.name, label, res.msg)
         if len(remaining) != len(self.pending_stops):
             self.pending_stops = remaining
             self._save()
@@ -618,6 +716,16 @@ class DoorController(UnitController):
         self.settings.setdefault("pulse_time", DEFAULT_PULSE_TIME)
         self.last_allowed: bool | None = None
         self._log_tasks: set[asyncio.Task] = set()
+        # Door log entries the backend could not take (offline); retried with their time.
+        self.pending_logs: list[dict[str, Any]] = []
+        self._pending_timer = 0
+
+    def as_store(self) -> dict[str, Any]:
+        return {**super().as_store(), "pending_logs": list(self.pending_logs)}
+
+    def restore(self, data: dict[str, Any]) -> None:
+        super().restore(data)
+        self.pending_logs = list(data.get("pending_logs") or [])
 
     @property
     def status(self) -> str:
@@ -652,8 +760,16 @@ class DoorController(UnitController):
             res = await self.api.door_check(rfid)
         except MarsError as err:
             self.busy = ""
-            self._reject(rfid, str(err), ("FEHLER", err.display))
-            return
+            if self._offline_ok(rfid, err):
+                # Backend down, Unlimited member (no time restriction): open, log later.
+                _LOGGER.warning("%s: backend down (%s), opening from whitelist", self.name, err)
+                res = DoorResult(allowed=True, reason="Offline")
+                offline = True
+            else:
+                self._reject(rfid, str(err), ("FEHLER", err.display))
+                return
+        else:
+            offline = False
         self.busy = ""
         self.last_allowed = res.allowed
         self._fire(
@@ -663,6 +779,7 @@ class DoorController(UnitController):
                 "unit_id": self.unit_id,
                 "allowed": res.allowed,
                 "reason": res.reason,
+                "offline": offline,
             },
         )
         if res.allowed:
@@ -682,13 +799,46 @@ class DoorController(UnitController):
             await self.hw.set_power(False)
 
     def _schedule_log(self, rfid: str, allowed: bool) -> None:
+        when = int(self._clock())
+
         async def _log() -> None:
             await self._sleep(DOOR_LOG_DELAY)
             try:
                 await self.api.log_door(rfid, allowed, self.unit_id)
             except MarsError as err:
-                _LOGGER.warning("%s: logDoorAccess failed: %s", self.name, err)
+                if err.permanent:
+                    _LOGGER.warning("%s: logDoorAccess rejected: %s", self.name, err)
+                else:
+                    _LOGGER.warning("%s: logDoorAccess failed, queued: %s", self.name, err)
+                    self.pending_logs.append({"rfid": rfid, "allowed": allowed, "time": when})
+                    self._save()
+                    self._notify()
 
         task = asyncio.ensure_future(_log())
         self._log_tasks.add(task)
         task.add_done_callback(self._log_tasks.discard)
+
+    def _fingerprint(self) -> tuple:
+        return (*super()._fingerprint(), len(self.pending_logs))
+
+    async def _tick(self) -> None:
+        if self.pending_logs:
+            self._pending_timer += 1
+            if self._pending_timer >= PENDING_RETRY_TICKS:
+                self._pending_timer = 0
+                await self.retry_pending()
+
+    async def retry_pending(self) -> None:
+        """Send door log entries that failed while the backend was unreachable."""
+        remaining = []
+        for item in self.pending_logs:
+            try:
+                await self.api.log_door(item["rfid"], item["allowed"], self.unit_id, item["time"])
+            except MarsError as err:
+                if not err.permanent:
+                    remaining.append(item)
+                else:
+                    _LOGGER.error("%s: queued door log dropped: %s", self.name, err)
+        if len(remaining) != len(self.pending_logs):
+            self.pending_logs = remaining
+            self._save()

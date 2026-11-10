@@ -53,6 +53,22 @@
  *   {"ok":false, "key":null, "name":null, "msg":"Key nicht gefunden"}
  *
  * ============================================================
+ * OFFLINE-FALLBACK (MakerLink):
+ *   GET machineswitch.php?action=whitelist
+ *   -> {"ok":true, "cards":["0xe7 0xf7 0x1b 0xa3", ...], "count":42}
+ *   Karten-UIDs aller aktiven Unlimited-Mitglieder (Logik wie getRFIDWhitelist in
+ *   query.php, zusätzlich ohne blockierte Mitglieder). Bewusst ohne Namen.
+ *
+ *   GET machineswitch.php?action=offlineSession&rfid=<uid>&unitid=1720&type=laser
+ *                        &start=<unix>&end=<unix>
+ *   Bucht eine Nutzung nach, die MakerLink während eines Serverausfalls
+ *   freigegeben hat (legt machine_time an und rechnet wie stop ab). Idempotent:
+ *   Gibt es für das Mitglied schon eine Session mit derselben Startzeit, wird
+ *   nicht doppelt gebucht ({"ok":true, "msg":"Bereits gestoppt", "already_stopped":true}).
+ *
+ *   logDoorAccess akzeptiert zusätzlich &time=<unix> (nachgemeldete Offline-Zutritte).
+ *
+ * ============================================================
  * HTTP Status Codes:
  *   200 = verarbeitet (auch ok:false bei Zugangsverweigung)
  *   400 = fehlende/ungültige Parameter
@@ -260,7 +276,36 @@ function doorLockCheck($con, string $rfid): array {
     return ['True', 'Limited User', implode('-', $plans)];
 }
 
-function logDoorAccess($con, string $rfid, string $status, int $unitid): void {
+/**
+ * Karten-UIDs aller aktiven Unlimited-Mitglieder (Offline-Whitelist für MakerLink).
+ * Abfrage aus getRFIDWhitelist (query.php), aber nur die UIDs und ohne blockierte Mitglieder.
+ */
+function getWhitelistSerials($con): array {
+    $query = "SELECT DISTINCT k.serial
+              FROM `key` k
+              INNER JOIN `contact` c ON k.cid = c.cid
+              INNER JOIN `membership` m ON m.cid = c.cid
+              INNER JOIN `plan` p ON p.pid = m.pid
+              WHERE COALESCE(c.deleted, 0) = 0
+                AND COALESCE(c.blocked, 0) = 0
+                AND m.end IS NULL
+                AND p.pid IN (12,13,14,15,16,19,20,50,51,52,53)
+                AND (k.end IS NULL OR k.end > CURDATE())
+                AND k.serial IS NOT NULL AND k.serial <> ''";
+    $result = mysqli_query($con, $query);
+    if (!$result) {
+        writeLOG(date('Y-m-d H:i:s') . ': whitelist: ' . mysqli_error($con));
+        http_response_code(500);
+        json_out(false, null, null, 'DB Fehler Whitelist');
+    }
+    $cards = [];
+    while ($row = mysqli_fetch_assoc($result)) {
+        $cards[] = (string)$row['serial'];
+    }
+    return $cards;
+}
+
+function logDoorAccess($con, string $rfid, string $status, int $unitid, ?int $time = null): void {
     $escapedRfid = mysqli_real_escape_string($con, $rfid);
     $query = "SELECT c.cid
               FROM `key` k
@@ -278,7 +323,8 @@ function logDoorAccess($con, string $rfid, string $status, int $unitid): void {
     $row = mysqli_fetch_assoc($result);
     $memberID = $row ? (int)$row['cid'] : 0;
     $statusValue = $status === 'TRUE' ? 1 : 0;
-    $timestamp = date('Y-m-d H:i:s');
+    // Nachgemeldeter Offline-Zutritt: echte Zeit verwenden (nie in der Zukunft).
+    $timestamp = date('Y-m-d H:i:s', ($time !== null && $time > 0 && $time < time()) ? $time : time());
     $query = "INSERT INTO access_log VALUES (
                 '$timestamp', $memberID, '$escapedRfid', $statusValue, $unitid, 2
               )";
@@ -321,11 +367,17 @@ if ($action === 'logDoorAccess') {
         json_out(false, null, null, 'Ungueltige Parameter fuer Tuer (unitid>0, check=2, status=TRUE|FALSE)');
     }
 
-    logDoorAccess($con, $rfid, $status, $unitid);
+    $doorTime = intval($_GET['time'] ?? 0);
+    logDoorAccess($con, $rfid, $status, $unitid, $doorTime > 0 ? $doorTime : null);
     json_out(true, null, null, 'Zutritt protokolliert', ['status' => $status, 'unitid' => $unitid]);
 }
 
-if (!in_array($action, ['start', 'stop'], true)) {
+if ($action === 'whitelist') {
+    $cards = getWhitelistSerials($con);
+    json_out(true, null, null, 'Whitelist', ['cards' => $cards, 'count' => count($cards)]);
+}
+
+if (!in_array($action, ['start', 'stop', 'offlineSession'], true)) {
     http_response_code(400);
     json_out(false, null, null, 'Parameter action fehlt oder ungueltig (start|stop)');
 }
@@ -336,6 +388,10 @@ if ($unitid <= 0) {
 if (!in_array($type, ['machine', 'laser', '3dprint', 'dtf', 'kiln'], true)) {
     http_response_code(400);
     json_out(false, null, null, 'Parameter type ungueltig (machine|laser|3dprint|dtf|kiln)');
+}
+if ($action === 'offlineSession' && empty($rfid)) {
+    http_response_code(400);
+    json_out(false, null, null, 'Parameter rfid fehlt');
 }
 if ($action === 'start' && empty($rfid)) {
     http_response_code(400);
@@ -482,6 +538,80 @@ if ($action === 'stop') {
     if (!$row) {
         json_out(false, null, null, 'Session nicht gefunden (key=' . $key . ' unitid=' . $unitid . ')');
     }
+    finishSession($con, $row, $justClosed, $type, $unitid);
+}
+
+// ============================================================
+// ACTION: OFFLINESESSION
+// Nachbuchung einer Nutzung, die MakerLink während eines Serverausfalls
+// freigegeben hat: machine_time mit Start und Ende anlegen und wie stop abrechnen.
+// ============================================================
+
+if ($action === 'offlineSession') {
+    $now   = time();
+    $start = intval($_GET['start'] ?? 0);
+    $end   = intval($_GET['end'] ?? 0);
+    // Plausibel: Start in den letzten 30 Tagen, Ende nach dem Start und nicht in der Zukunft.
+    if ($start <= $now - 30 * 86400 || $start > $now || $end < $start) {
+        http_response_code(400);
+        json_out(false, null, null, 'Parameter start/end ungueltig');
+    }
+    $end = min($end, $now);
+
+    $query = "SELECT c.cid, c.firstName, c.lastName
+              FROM `key` k
+              INNER JOIN `contact` c ON k.cid = c.cid
+              WHERE k.serial = '" . mysqli_real_escape_string($con, $rfid) . "'
+              ORDER BY (k.end IS NULL) DESC, k.end DESC
+              LIMIT 1";
+    $result = mysqli_query($con, $query);
+    if (!empty($error = mysqli_error($con))) {
+        http_response_code(500);
+        json_out(false, null, null, 'DB Fehler: ' . $error);
+    }
+    $member = mysqli_fetch_assoc($result);
+    if (!$member || !$member['cid']) {
+        // Karte inzwischen unbekannt: nicht buchbar, MakerLink verwirft den Eintrag (4xx).
+        http_response_code(404);
+        json_out(false, null, null, 'Karte unbekannt');
+    }
+    $memberID = (int)$member['cid'];
+
+    // Idempotenz: dieselbe Nutzung (Mitglied + Startzeit) wurde schon angelegt.
+    $query  = "SELECT * FROM machine_time WHERE cid = $memberID AND machine_start = $start
+               ORDER BY id DESC LIMIT 1";
+    $result = mysqli_query($con, $query);
+    if (!empty($error = mysqli_error($con))) {
+        http_response_code(500);
+        json_out(false, null, null, 'DB Fehler: ' . $error);
+    }
+    if ($row = mysqli_fetch_assoc($result)) {
+        finishSession($con, $row, false, $type, $unitid);
+    }
+
+    $fn = mysqli_real_escape_string($con, $member['firstName']);
+    $ln = mysqli_real_escape_string($con, $member['lastName']);
+    $query = "INSERT INTO machine_time VALUES (NULL, $memberID, $unitid, '$fn', '$ln', $start, $end, NULL)";
+    mysqli_query($con, $query);
+    if (!empty($error = mysqli_error($con))) {
+        http_response_code(500);
+        json_out(false, null, null, 'DB Fehler Insert: ' . $error);
+    }
+    $newId  = (int)mysqli_insert_id($con);
+    $result = mysqli_query($con, "SELECT * FROM machine_time WHERE id = $newId");
+    $row    = $result ? mysqli_fetch_assoc($result) : null;
+    if (!$row) {
+        http_response_code(500);
+        json_out(false, null, null, 'DB Fehler: Offline-Session nicht gefunden');
+    }
+    finishSession($con, $row, true, $type, $unitid);
+}
+
+/**
+ * Abrechnung einer geschlossenen machine_time-Zeile (gemeinsam für stop und offlineSession).
+ * Beendet das Skript immer mit einer JSON-Antwort.
+ */
+function finishSession($con, array $row, bool $justClosed, string $type, int $unitid): void {
     // Wiederholter Stop: bereits geschlossen und (falls kostenpflichtig) bezahlt -> nichts tun.
     if (!$justClosed && ($type === 'machine' || (int)$row['paid'] === 1)) {
         json_out(true, null, null, 'Bereits gestoppt', ['already_stopped' => true]);

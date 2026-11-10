@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant
 from . import MakerLinkConfigEntry
 from .const import CONF_API_KEY
 
-TO_REDACT = {CONF_API_KEY}
+# Card UIDs (offline session, queued offline bookings and door logs) are personal data.
+TO_REDACT = {CONF_API_KEY, "rfid", "offline_rfid"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -26,8 +27,10 @@ async def async_get_config_entry_diagnostics(
                 "config": dict(entry.subentries[sub_id].data),
                 "status": unit.status,
                 "display": unit.display_lines,
-                "state": unit.as_store(),
+                "state": async_redact_data(unit.as_store(), TO_REDACT),
             }
             for sub_id, unit in hub.units.items()
         },
+        # Only size and age, never the card numbers.
+        "whitelist": hub.whitelist.info(),
     }

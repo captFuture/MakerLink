@@ -34,9 +34,21 @@ Parameter: `rfid`
 Antwort ist ein Array, `[0] == "True"` bedeutet Zutritt: `["True","Limited User","Mon18-22"]` oder `["False","Wrong Time","..."]`.
 
 ### `action=logDoorAccess`
-Parameter: `rfid`, `status` (TRUE|FALSE), `unitid`, `check=2`
+Parameter: `rfid`, `status` (TRUE|FALSE), `unitid`, `check=2`, optional `time` (Unix-Zeit, ab 0.6.0)
 
-Wird ca. 2 s nach der Relaisaktion aufgerufen.
+Wird ca. 2 s nach der Relaisaktion aufgerufen. Mit `time` meldet MakerLink Zutritte nach, die während eines Serverausfalls stattfanden (Werte in der Zukunft werden ignoriert).
+
+### `action=whitelist` (ab 0.6.0)
+Ohne Parameter. Liefert die Karten-UIDs aller aktiven Unlimited-Mitglieder für den Offline-Fallback, **ohne Namen**:
+```json
+{"ok":true, "key":null, "name":null, "msg":"Whitelist", "cards":["0xe7 0xf7 0x1b 0xa3", "..."], "count":42}
+```
+Gleiche Regel wie `getRFIDWhitelist` in `query.php` (Plan-IDs 12, 13, 14, 15, 16, 19, 20, 50, 51, 52, 53, aktive Mitgliedschaft und Karte, nicht gelöscht), zusätzlich ohne blockierte Mitglieder.
+
+### `action=offlineSession` (ab 0.6.0)
+Parameter: `rfid`, `unitid`, `type`, `start`, `end` (Unix-Zeiten)
+
+Bucht eine Nutzung nach, die MakerLink während eines Serverausfalls freigegeben hat: legt `machine_time` mit Start und Ende an und rechnet wie `stop` ab. **Idempotent** über Mitglied und Startzeit, eine zweite Meldung liefert `already_stopped`. Start älter als 30 Tage, Start in der Zukunft oder Ende vor dem Start → 400. Unbekannte Karte → 404, MakerLink verwirft den Eintrag dann.
 
 ### Ohne/ungültige `action`
 Liefert `400`, aber erst **nach** Auth und DB-Verbindung. Die Integration nutzt das als Verbindungstest: 400 bedeutet ok, 401 einen falschen Key, 500 einen DB-Fehler.
@@ -46,6 +58,7 @@ Liefert `400`, aber erst **nach** Auth und DB-Verbindung. Die Integration nutzt 
 | Erweiterung | Zweck |
 |---|---|
 | ✅ `action=stop&end=<unix>` + Idempotenz | Umgesetzt in `backend/machineswitch.php` |
-| `action=trainedCards&unitid=X` | `{"ok":true,"cards":["<16 hex>",...],"version":"<etag>"}` mit `sha256(salt + rfid)`, gekürzt auf 8 Byte. Für den Offline-Fallback. |
-| `action=offlineSession&rfid&unitid&type&start&end&offline_id` | Nachverrechnung einer Offline-Nutzung, idempotent über `offline_id`. |
+| ✅ `action=whitelist` | Umgesetzt (0.6.0), siehe oben. Ersetzt das geplante `trainedCards` vorerst. |
+| ✅ `action=offlineSession` | Umgesetzt (0.6.0), idempotent über Mitglied und Startzeit statt über eine `offline_id`, deshalb ohne neue DB-Spalte. |
+| `action=trainedCards&unitid=X` | Später: Whitelist geschnitten mit den Schulungen pro Unit (Entscheidung des Users: Offline-Schulungsprüfung nachrüsten). |
 | ✅ Fix SQL-Injection im `start`-Query | Umgesetzt in `backend/machineswitch.php` |
