@@ -20,14 +20,18 @@ from .readers import classify_entities
 ESPHOME_DOMAIN = "esphome"
 
 
+def _esphome_devices(hass: HomeAssistant) -> list[dr.DeviceEntry]:
+    """Devices of the ESPHome integration only (not the whole device registry)."""
+    registry = dr.async_get(hass)
+    return [
+        device
+        for entry in hass.config_entries.async_entries(ESPHOME_DOMAIN)
+        for device in dr.async_entries_for_config_entry(registry, entry.entry_id)
+    ]
+
+
 def _is_reader(hass: HomeAssistant, device: dr.DeviceEntry) -> bool:
-    on_esphome = any(
-        (entry := hass.config_entries.async_get_entry(entry_id)) is not None
-        and entry.domain == ESPHOME_DOMAIN
-        for entry_id in device.config_entries
-    )
-    if not on_esphome:
-        return False
+    """For an ESPHome device: does it run MakerLink reader firmware?"""
     project = f"{device.manufacturer or ''}.{device.model or ''}".lower()
     if project.startswith(ESPHOME_PROJECT_NAME):
         return True
@@ -60,7 +64,7 @@ def find_readers(hass: HomeAssistant, entries: list[ConfigEntry]) -> list[dict[s
     """Readers that do not belong to a unit yet."""
     assigned = assigned_readers(entries)
     readers = []
-    for device in dr.async_get(hass).devices.values():
+    for device in _esphome_devices(hass):
         if device.id in assigned or not _is_reader(hass, device):
             continue
         entities = device_entities(hass, device.id)

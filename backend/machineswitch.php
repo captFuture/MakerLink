@@ -66,16 +66,27 @@ header('Content-Type: application/json; charset=utf-8');
 // DB-Verbindung – gleich wie query.php
 // ============================================================
 // ---- Auth ----------------------------------------------------------------
-// X-MARS-Key Header (von ESPHome Nodes)
-// Den Key hier eintragen ODER aus config.inc.php laden wenn du ihn dort zentral verwaltest.
+// X-MARS-Key Header (von ESPHome Nodes und der MakerLink-Integration)
+// Der Key steht ausschließlich in config.inc.php, es gibt keinen Standardwert.
 // Beispiel config.inc.php: $config_mars_api_key = 'dein-geheimer-key';
 
 require_once(__DIR__ . '/../config.inc.php');
 
-$valid_api_key = $config_mars_api_key ?? 'CHANGEME';
+// Kein Standard-Key: Ist $config_mars_api_key nicht gesetzt, leer oder noch der
+// Platzhalter, wird JEDE Anfrage abgelehnt (fail closed). Früher galt dann
+// 'CHANGEME' als gültiger Key, und der steht öffentlich im Quellcode.
+$valid_api_key = (isset($config_mars_api_key) && is_string($config_mars_api_key))
+    ? $config_mars_api_key
+    : '';
+if ($valid_api_key === '' || $valid_api_key === 'CHANGEME') {
+    error_log('machineswitch.php: $config_mars_api_key fehlt oder ist der Platzhalter - alle Anfragen abgelehnt');
+    http_response_code(500);
+    exit(json_encode(['ok' => false, 'msg' => 'Server nicht konfiguriert (API-Key fehlt)']));
+}
 
 $request_key = $_SERVER['HTTP_X_MARS_KEY'] ?? '';
-if (empty($request_key) || $request_key !== $valid_api_key) {
+// hash_equals: Vergleich in konstanter Zeit, verrät den Key nicht über Antwortzeiten.
+if (!is_string($request_key) || $request_key === '' || !hash_equals($valid_api_key, $request_key)) {
     http_response_code(401);
     exit(json_encode(['ok' => false, 'msg' => 'Unauthorized']));
 }

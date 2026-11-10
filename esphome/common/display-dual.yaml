@@ -1,6 +1,9 @@
 # Displays: LCD 16x2 (PCF8574) UND OLED 128x32 (SSD1306), beide immer einkompiliert.
 # Es steckt, was gebaut wurde; das fehlende Display bleibt einfach dunkel. Dadurch
 # braucht ein Wechsel zwischen LCD und OLED kein Neu-Flashen.
+# Angeschlossen ist immer nur EIN Display. Für das fehlende meldet ESPHome beim Start
+# "Communication failed ... marked FAILED". Das ist erwartet und harmlos. ESPHome versucht
+# ein FAILED-Display nicht erneut: Nach dem Umstecken den Reader neu starten.
 #
 # Zwei getrennte I2C-Busse (deklariert im Hardware-Paket), weil das LCD (5 V) und das OLED (3,3 V)
 # verschiedene Pegel und Geschwindigkeiten brauchen:

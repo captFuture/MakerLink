@@ -57,6 +57,7 @@ from .readers import (
 
 ACTIONS = ["stop_session", "open_door", "out_of_order", "admin"]
 IDENTIFY_SECONDS = 10
+SUBSCRIBE_DEBOUNCE = 1.0  # seconds between two snapshots sent to one panel
 
 
 @callback
@@ -118,9 +119,23 @@ def ws_units(
 def ws_subscribe(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
+    # Changes come in bursts (state changes every second, dozens of registry events when
+    # a device is added). A snapshot is not free (it looks through the device registry),
+    # so at most one is sent per SUBSCRIBE_DEBOUNCE seconds. Without this a busy reader
+    # with the panel open blocked the event loop of a Raspberry Pi for minutes.
+    pending: Callable[[], None] | None = None
+
+    @callback
+    def send(_now: Any = None) -> None:
+        nonlocal pending
+        pending = None
+        connection.send_message(websocket_api.event_message(msg["id"], _snapshot(hass)))
+
     @callback
     def forward(*_args: Any) -> None:
-        connection.send_message(websocket_api.event_message(msg["id"], _snapshot(hass)))
+        nonlocal pending
+        if pending is None:
+            pending = async_call_later(hass, SUBSCRIBE_DEBOUNCE, send)
 
     # A new ESPHome device (and its entities) shows up in the registries.
     unsubs: list[Callable[[], None]] = [
@@ -131,12 +146,16 @@ def ws_subscribe(
 
     @callback
     def unsubscribe() -> None:
+        nonlocal pending
         for unsub in unsubs:
             unsub()
+        if pending is not None:
+            pending()
+            pending = None
 
     connection.subscriptions[msg["id"]] = unsubscribe
     connection.send_result(msg["id"])
-    forward()
+    send()
 
 
 @websocket_api.websocket_command(

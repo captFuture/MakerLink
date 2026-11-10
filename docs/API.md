@@ -1,6 +1,6 @@
 # MARS Backend-API (`machineswitch.php`)
 
-Alle Aufrufe sind `GET` mit dem Header `X-MARS-Key: <key>`. Ohne gültigen Key antwortet der Server mit `401 {"ok":false,"msg":"Unauthorized"}`.
+Alle Aufrufe sind `GET` mit dem Header `X-MARS-Key: <key>`. Ohne gültigen Key antwortet der Server mit `401 {"ok":false,"msg":"Unauthorized"}`. Ab dem Patch in `backend/` gibt es keinen Standard-Key mehr: Fehlt `$config_mars_api_key` in `config.inc.php`, ist er leer oder noch `CHANGEME`, lehnt der Server **jede** Anfrage mit `500 {"ok":false,"msg":"Server nicht konfiguriert (API-Key fehlt)"}` ab. Der Key wird zeitkonstant verglichen (`hash_equals`).
 Statuscodes: 200 = verarbeitet (auch `ok:false` bei verweigertem Zugang), 400 = Parameter fehlen oder sind ungültig, 500 = Datenbankfehler.
 
 Die `rfid` steht im MARS-Format: Bytes als `0x..` in Kleinbuchstaben, ohne führende Null, durch Leerzeichen getrennt (zB `0xf4 0x96 0xd2 0x3`).

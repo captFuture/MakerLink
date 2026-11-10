@@ -264,3 +264,108 @@ Version 0.4.0 → **0.4.1**.
 **Ursache:** Das Onboarding im Panel hängte beide Sicherheitsschalter-Eingänge der Firmware automatisch an jede Maschine. Ein nicht angeschlossener Eingang liest sich als „offen“, also zeigte das Display „Tür offen“ und der Start war gesperrt.
 
 **Ergebnis (v0.5.2):** Im Einrichten/Bearbeiten-Formular gibt es „Sicherheitsschalter“ mit keine / 1 / 2 (Standard keine). Nur dann werden die Eingänge zugeordnet. Controller, Display, Entität und Panel zeigten Interlocks schon vorher nur bei konfigurierten Schaltern.
+
+## 2026-11-09 – Bestandsaufnahme
+> was fehlt uns noch?
+
+**Antwort:** Offene Punkte nach Priorität. Vor dem Echtbetrieb: Backend-Patch deployen, E2E-Test gegen den echten MARS-Server, Unit-IDs der 30 Bestands-Reader. Fehlende Funktionen: Offline-Fallback (Phase 1c), Zigbee-Stufen 1–3, Scan-Protokoll im Panel. Qualität: HA-Tests für Config-Flow/WebSocket, Release-Tags für HACS. Details in der Antwort im Chat.
+
+## 2026-11-09 – Home-Assistant-MCP für Remote-Tests
+> können wir ein mcp verbinden um die sachen remote durchzuführen? der Home Assistant MCP Server ist installiert und online
+
+**Ergebnis:** Der ha-mcp-Server ist in Claude bereits verbunden und erreicht das Test-HA (HA 2026.11.0, ha-mcp 9.1.2). MakerLink ist geladen (1 Einheit). Der Demo-Reader `makerlink-9999` (192.168.20.224) war zum Prüfzeitpunkt nicht erreichbar, alle seine Entitäten `unavailable`. Regel: Lesen ohne Rückfrage, schreibende Aktionen (Services, Events, Neustart, HACS-Update) nur nach Bestätigung, weil ein simulierter Kartenscan echte Buchungen am MARS-Server auslöst.
+
+## 2026-11-10 – Bricht der Backend-Patch die alten Reader?
+> zu > Backend-Patch deployen (?) ... würde das die momentane lösung brechen? oder kann ich es einfach deployen und die alten reader gehen trotzdem?
+
+**Analyse (Diff legacy ↔ backend, abgeglichen mit `maker-reader-logic.yaml`):** Abwärtskompatibel. Drei inhaltliche Änderungen:
+1. Start: `$rfid` wird maskiert. Für echte UIDs (`0xf4 0x96 …`) gibt es nichts zu maskieren, das Verhalten ist identisch.
+2. Stop ohne `end` (alte Reader senden keins) rechnet wie bisher mit `time()`. Gleiches UPDATE und gleiche Antwort für offene Sessions.
+3. Stop einer bereits geschlossenen Session: bisher wurde erneut abgerechnet (Doppelbuchung), jetzt kommt `ok:true, "Bereits gestoppt"` ohne `cost`. Der alte Reader zeigt dann „Schaltet aus“ ohne Guthaben. Unbekannter Key wie bisher „Session nicht gefunden“.
+
+Tür-Aktionen sind unverändert. **Restrisiko:** Die PHP-Syntax ist nie geprüft worden (kein PHP lokal, WSL startet nicht). Deshalb parallel als Testdatei deployen, `php -l`, testen, dann tauschen; Backup für den Rückweg.
+
+## 2026-11-10 – CHANGEME-Fix im Backend
+> ja, bau den CHANGEME-fix ein
+
+**Ergebnis:**
+- `backend/machineswitch.php` hat keinen Standard-Key mehr. Fehlt `$config_mars_api_key`, ist er leer oder `CHANGEME`, antwortet der Server auf jede Anfrage mit 500 und schreibt einen Eintrag ins PHP-Fehlerlog (fail closed).
+- Der Key wird zeitkonstant mit `hash_equals` verglichen. Er wird nicht getrimmt, damit das Verhalten gegenüber heute exakt gleich bleibt.
+- Normaler Betrieb (Key gesetzt) ist unverändert.
+- Achtung: Ist der echte Key wörtlich `CHANGEME`, sperrt der Patch alle Reader aus.
+- Doku: `docs/API.md`, `backend/README.md`. Version 0.5.2 → **0.5.3** (Push-Regel; die Integration selbst ist unverändert).
+
+## 2026-11-10 – Testdatei auf dem Server
+> (Screenshot: Browser ruft `http://makeradmin.ddns.net:8080/crm/api/machineswitch_test.php` auf, Antwort `{"ok":false,"msg":"Unauthorized"}`)
+
+**Bewertung:** Die Datei ist syntaktisch fehlerfrei (sonst Parse-Fehler statt JSON). Der Key in `config.inc.php` ist gesetzt und nicht `CHANGEME` (sonst 500). Ohne Header 401 wie erwartet.
+- **Nächster Schritt:** `curl` mit `X-MARS-Key`, erwartet 400. Danach MakerLink per „Neu konfigurieren“ auf die Testdatei stellen und Start/Stop mit Testkarte remote prüfen.
+- **Nebenbefund:** Die API läuft über unverschlüsseltes HTTP übers Internet, der Key geht im Klartext. Das ist kein Effekt des Patches. Empfehlung: HTTPS (Let's Encrypt).
+
+## 2026-11-10 – Test der Testdatei mit Key
+> (PowerShell: `curl -i -H "X-MARS-Key: <redigiert>" …/machineswitch_test.php` scheiterte, weil `curl` in PowerShell `Invoke-WebRequest` ist)
+
+**Ergebnis** (mit `curl` aus Git Bash ausgeführt, ohne `action`, also ohne Wirkung):
+- Richtiger Key → **400** „Parameter action fehlt“, Key-Vergleich und DB funktionieren.
+- Ohne Key → 401. Falscher Key → 401.
+- Server: Apache 2.4 / PHP 8.3.
+
+Der Key wurde im Chat im Klartext genannt und läuft ohnehin unverschlüsselt über HTTP. Beim Umstieg auf HTTPS einen neuen Key vergeben. Nächster Schritt: Start/Stop mit Testkarte über die Testdatei.
+
+## 2026-11-10 – Updates ohne manuellen Aufwand über ha-mcp?
+> ich habe einen mcp server auf home assistant installiert.
+> Checke ob wir jetzt die veränderungen für makerlink (esphome) ohne mabuellen aufwand umsetzen können
+
+**Bestandsaufnahme** (nur gelesen, nichts geändert):
+- **Integration:** HACS führt MakerLink als Custom-Repo `captFuture/MakerLink`, installiert ist Commit `50fba17` (keine Releases, HACS verfolgt Commits). Entity `update.makerlink_update` existiert. Nach einem Push lässt sich das Update samt HA-Neustart per MCP auslösen (Schreibaktion, nur nach Rückfrage).
+- **ESPHome-Dateien nach `/config/esphome/`:** Mit ha-mcp derzeit **nicht** möglich. Die Datei-Tools fehlen („HA-MCP File & YAML Tools“-Eintrag nicht eingerichtet), und `esphome/` steht auch dann nicht in der Schreib-Allowlist, sondern müsste in den ha-mcp-Einstellungen als eigenes Verzeichnis freigegeben werden.
+- **Kompilieren + OTA:** ha-mcp kann ESPHome nicht direkt bauen. Möglich ist `update.install` auf der „Firmware“-Update-Entity, die die ESPHome-Integration pro Gerät anlegt (baut im Device Builder und flasht OTA). Für den Demo-Reader 9999 gibt es keine solche Entity, er ist offline.
+- Add-ons vorhanden: ESPHome Device Builder 2026.10.2, Samba, SSH, Studio Code Server. Die Samba-Freigabe ist von diesem PC aus derzeit nicht erreichbar.
+
+## 2026-11-10 – HA-MCP-Integration installieren
+> ja, mach schritt 1 und 2
+
+`ha_manage_hacs(download, homeassistant-ai/ha-mcp)` abgesetzt. Antwort: „Anthropic Proxy: Invalid content from server“, danach scheiterten auch reine Lesezugriffe. Ob der Download durchlief, ist offen. Den Neustart habe ich deshalb nicht ausgelöst.
+
+## 2026-11-10 – ESPHome-Dateien per ha-mcp nach HA kopiert
+> ja, setz die option und kopier die dateien
+> ich habe den eintrag hinzugefügt
+
+- `allowed_dirs` am Eintrag „HA-MCP File & YAML Tools“ kann ha-mcp nicht selbst setzen (eigene Einträge sind gesperrt). Der User hat `esphome` in der UI freigegeben.
+- Vergleich `esphome/` (Repo) mit `/config/esphome/` (HA): Nur `common/makerlink-reader-base.yaml` und `common/esp32c5-xiao-pn532-zigbee.yaml` unterschieden sich, und zwar nur in `project.version` (0.5.0 → 0.5.3). Die Größenunterschiede kamen von CRLF/LF. Beide Dateien überschrieben, die Größen stimmen jetzt mit dem Repo überein.
+- Unverändert gelassen: die Gerätedateien in HA (`9997/9998/9999-makerlink.yaml`, `1720–1723-makerlink-printer-*.yaml`; sie heißen anders als die Beispiele im Repo), die `tocopy-*.yaml` (identisch) und `secrets.yaml`.
+- `/config/esphome` ist in HA ein eigenes Git-Repo (`.git`).
+
+## 2026-11-10 – Reader 9998 remote über Tailscale an HA
+> ich bin gerade nicht vor-ort wo der home assistant steht. kann ich den reader (er liegt vor mir am tisch) irgendwie remote verbinden und testen?
+> das funktioniert so nicht - ich habe den reader jetzt direkt ins TarantlHome gebracht
+> ja, führ die tailscale befehle aus
+> route ist freigegeben, leg den reader in HA an
+
+- Der Weg über den Windows-Hotspot (`192.168.137.x`) des Gaming-Rechners klappte nicht. Am WLAN `TarantlHome` bekam der Reader `192.168.50.18` und war vom Laptop aus erreichbar (Ping, Port 6053).
+- Brücke: Tailscale auf dem Laptop (Tailnet-Name `chrislaptop`), `tailscale set --advertise-routes=192.168.50.18/32`, Route vom User in der Adminkonsole freigegeben. Das HA-Tailscale-Add-on hat `accept_routes: true`.
+- ESPHome-Eintrag per MCP angelegt (Host `192.168.50.18`) → „9998 DEMO MakerLink Supermini“ (`01M73F54KR5CZ8AP9WAFR2Y6JC`). Den Noise-Key hat HA selbst aus dem Device Builder geholt.
+- Befunde am Reader: LCD (PCF8574 `0x27`) „Communication failed“, OLED `0x3C` ok, PN532 ok. Der Router weist ihn sporadisch ab („Authentication Failed“, „Probe Request Unsuccessful“).
+- Nach dem Test: Route wieder entfernen (`tailscale set --advertise-routes=`) und den ESPHome-Eintrag auf die Adresse vor Ort umstellen bzw. löschen.
+
+## 2026-11-10 – Ein Display pro Reader
+> der reader ist da und in makerlink sichtbar (noch nicht eingerichtet oder zugeordnet)
+> generell ist zu sagen > ein reader kann ein Oled oder ein LCD haben > beide codes sind am gerät, es ist aber immer nur eine display -art angeschlossen
+
+**Entscheidung/Doku:** `display-dual.yaml` bleibt wie gebaut (beide Displays einkompiliert, eines angeschlossen). Im Kopfkommentar ergänzt: Das „Communication failed … marked FAILED“ des fehlenden Displays ist erwartet. Nach dem Umstecken muss der Reader neu gestartet werden.
+
+## 2026-11-10 – HA friert ein (Watchdog-Neustarts)
+> der home assistant scheint immer wieder offline zu sein (reboot? beschäftigt?) was stimmt hier nicht
+> ich komme nicht auf das dashboard - kann es sein, dass wir was kaputt gemacht haben? kannst du über den mcp zugreifen und debuggen?
+
+**Befund** (Supervisor- und Core-Log per MCP):
+- Der Core-Event-Loop war mehrfach minutenlang blockiert: ~20:33–20:35:47, dann ab ~20:40. Der Supervisor-Watchdog verpasste API-Antworten (20:34, 20:42) und startete Core um 20:45 neu, die SQLite-DB wurde nicht sauber geschlossen. Nach dem Neustart um 20:56 hing HA erneut. Speicher war nicht das Problem (RPi4 8 GB, Add-ons ~2 GB), es gab auch keinen nativen Absturz (fault_log leer).
+- Zeitlich passt das zu: Reader 9998 kommt online (ESPHome-Eintrag 20:32), Einheit 9998 angelegt, MakerLink-Panel im Browser offen.
+
+**Ursache (sehr wahrscheinlich):** `makerlink/subscribe` baute bei **jedem** Dispatcher-Signal (jede Zustandsänderung der Reader-Entitäten) und bei **jedem** Geräte-/Entitäts-Registry-Event einen kompletten Snapshot. `discovery.find_readers` ging dabei jedes Mal über **alle** Geräte der Installation (über die veraltete Mapping-API `devices.values()`). Solange 9999 offline war, fiel das nicht auf. Mit dem Online-Reader und den Registry-Bursts beim Anlegen blockierte das den Pi. Nach jedem Neustart verbindet sich das offene Panel neu → Endlosschleife.
+
+**Fix:**
+- `ws_api.py`: Snapshots an das Panel gebündelt, höchstens einer pro Sekunde (`SUBSCRIBE_DEBOUNCE`).
+- `discovery.py`: Es werden nur noch die Geräte der ESPHome-Einträge durchsucht (`async_entries_for_config_entry`) statt der ganzen Registry. Das behebt auch zwei Deprecation-Warnungen.
+
+**Sofortmaßnahme bis zum Update:** MakerLink-Panel in allen Browsern schließen.
