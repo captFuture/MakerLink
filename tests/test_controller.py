@@ -149,12 +149,15 @@ async def test_rejected_start_shows_message():
     assert hw.lines == ("-MakerAustria-", "Karte bitte")
 
 
-async def test_out_of_order_rejects():
-    ctrl, api, hw, _ = make_machine()
+async def test_out_of_order_ignores_cards():
+    ctrl, api, hw, events = make_machine()
     await ctrl.async_start()
     await ctrl.set_setting("out_of_order", True)
+    events.clear()
     await ctrl.on_card(CARD)
     assert api.calls == [] and hw.power is False
+    assert events == [] and ctrl.card_cooldown == 0
+    assert hw.lines[0] == "AUSSER BETRIEB"
 
 
 async def test_interlock_blocks_start():

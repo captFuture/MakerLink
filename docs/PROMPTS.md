@@ -265,6 +265,11 @@ Version 0.4.0 → **0.4.1**.
 
 **Ergebnis (v0.5.2):** Im Einrichten/Bearbeiten-Formular gibt es „Sicherheitsschalter“ mit keine / 1 / 2 (Standard keine). Nur dann werden die Eingänge zugeordnet. Controller, Display, Entität und Panel zeigten Interlocks schon vorher nur bei konfigurierten Schaltern.
 
+## 2026-10-21 – Außer Betrieb: keine Karte lesen
+> wenn der "ausser betrieb" modus aktiv ist, darf keine karte gelesen werden
+
+**Ergebnis:** `on_card` im Controller kehrt bei „Außer Betrieb“ sofort zurück: kein API-Call, keine Ablehnungsmeldung, kein `makerlink_card_rejected`-Event, kein Cooldown. Das Display zeigt weiter „AUSSER BETRIEB“.
+
 ## 2026-11-09 – Bestandsaufnahme
 > was fehlt uns noch?
 

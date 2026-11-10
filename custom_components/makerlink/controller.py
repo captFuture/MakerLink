@@ -167,6 +167,10 @@ class UnitController:
 
     async def on_card(self, raw_uid: str) -> None:
         """A card was presented at the reader."""
+        if self.out_of_order:
+            # Out of order: cards are not read at all (no API call, no message, no event).
+            _LOGGER.debug("%s: card ignored, out of order", self.name)
+            return
         rfid = uid_to_mars(raw_uid)
         if rfid is None:
             _LOGGER.debug("%s: ignoring non-UID tag %r", self.name, raw_uid)
@@ -176,10 +180,7 @@ class UnitController:
             return
         self.card_cooldown = CARD_COOLDOWN
         async with self._lock:
-            if self.out_of_order:
-                self._reject(rfid, "Ausser Betrieb", ("AUSSER BETRIEB", "Bitte warten"))
-            else:
-                await self._handle_card(rfid)
+            await self._handle_card(rfid)
         await self._refresh()
 
     async def tick(self) -> None:
