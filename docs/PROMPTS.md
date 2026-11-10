@@ -231,3 +231,8 @@ Kontext: Der User flashte die S3-Firmware und bekam einen Bootloop (`spi_flash: 
 **Fix 2 (Firmware):** Lokales Scan-Feedback. Sofort beim Lesen zeigt das Display „Karte erkannt / Bitte warten...“, bis neue Texte aus HA kommen, höchstens 4 s (Globals `g_scan_pending`/`g_scan_ms`, in allen Display-Paketen).
 
 Version 0.4.0 → **0.4.1**.
+
+## 2026-10-21 – Außer Betrieb: keine Karte lesen
+> wenn der "ausser betrieb" modus aktiv ist, darf keine karte gelesen werden
+
+**Ergebnis:** `on_card` im Controller kehrt bei „Außer Betrieb“ sofort zurück: kein API-Call, keine Ablehnungsmeldung, kein `makerlink_card_rejected`-Event, kein Cooldown. Das Display zeigt weiter „AUSSER BETRIEB“.

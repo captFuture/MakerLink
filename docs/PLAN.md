@@ -99,7 +99,7 @@ Port von `maker-reader-logic.yaml`:
 - **Schaltziel extern aus während Session:** Stop-Sequenz.
 - **Schaltziel extern ein ohne Session:** Admin-Modus.
 - **Tür geöffnet während Session oder Nachlauf:** Schaltziel sofort aus, Session stoppen.
-- **Außer Betrieb:** Scans werden abgelehnt. Karten-Cooldown 5 s, Fehlermeldungen 3 s.
+- **Außer Betrieb:** Karten werden gar nicht gelesen (kein API-Call, keine Meldung, kein Event); das Display zeigt weiter „AUSSER BETRIEB“. Karten-Cooldown 5 s, Fehlermeldungen 3 s.
 - **Persistenz** über HA `Store`: Session-Key, Name, Startzeit, Einstellungen, Queue offener Stops.
 - **HA-Events:** `makerlink_session_started`, `makerlink_session_stopped`, `makerlink_card_rejected`.
 
