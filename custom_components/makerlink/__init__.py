@@ -53,5 +53,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: MakerLinkConfigEntry) -
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: MakerLinkConfigEntry) -> None:
-    """Reload when units (subentries) are added, changed or removed."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Reload when the connection or units (subentries) are added, changed or removed."""
+    hass.config_entries.async_schedule_reload(entry.entry_id)

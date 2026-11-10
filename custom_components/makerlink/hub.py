@@ -278,12 +278,26 @@ class MakerLinkHub:
             for e in entity_ids
         )
 
+    def _unit_device(self, sub_id: str) -> dr.DeviceEntry | None:
+        """The MakerLink device of one unit.
+
+        Looks only at this entry's devices: `async_get_device(identifiers=...)` is
+        deprecated because identifiers are no longer unique across config entries.
+        """
+        identifier = (DOMAIN, sub_id)
+        for device in dr.async_entries_for_config_entry(
+            dr.async_get(self.hass), self.entry.entry_id
+        ):
+            if identifier in device.identifiers:
+                return device
+        return None
+
     def unit_snapshot(self, sub_id: str) -> dict[str, Any]:
         """Everything the sidebar panel shows for one unit."""
         unit = self.units[sub_id]
         hardware = self._hardware[sub_id]
         subentry = self.entry.subentries[sub_id]
-        device = dr.async_get(self.hass).async_get_device(identifiers={(DOMAIN, sub_id)})
+        device = self._unit_device(sub_id)
         interlocks = []
         for entity_id in hardware.interlocks:
             state = self.hass.states.get(entity_id)

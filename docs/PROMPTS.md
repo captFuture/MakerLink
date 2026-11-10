@@ -374,3 +374,51 @@ Der Key wurde im Chat im Klartext genannt und läuft ohnehin unverschlüsselt ü
 - `discovery.py`: Es werden nur noch die Geräte der ESPHome-Einträge durchsucht (`async_entries_for_config_entry`) statt der ganzen Registry. Das behebt auch zwei Deprecation-Warnungen.
 
 **Sofortmaßnahme bis zum Update:** MakerLink-Panel in allen Browsern schließen.
+
+## 2026-11-10 – Fix ausgerollt
+> ist gepusht, spiel das HACS-Update ein
+> ja, akzeptieren
+
+- Der Marketplace (HACS) verlangt pro Benutzer die Bestätigung seines Warnhinweises. Für den MCP-Benutzer nach Zustimmung des Users per `accept_warning` bestätigt.
+- MakerLink `05cf13d` installiert, HA um 21:07 neu gestartet. Danach antwortet die API stabil in ~1,1 s. Die beiden Deprecation-Warnungen aus `discovery.py` tauchen nicht mehr auf. Einheit 9998 läuft: online, idle, Relais aus.
+- Offen: die Deprecation `async_get_device` in `hub.py:286` (gilt noch bis HA 2027.8).
+
+## 2026-11-10 – Erster Ende-zu-Ende-Test mit Reader 9998 (remote über Tailscale)
+> Panel ist offen, Karte gescannt – schau nach
+> Karte nochmal gescannt – schau nach
+
+- 21:10:39 Scan → `checking` → `active`, MARS meldet Benutzer „Christoph“, Relais ein, Display `EIN:` / `Christoph`.
+- 21:11:12 zweiter Scan → `stopping` → `idle` (Nachlaufzeit 0), Relais aus, `last_cost` 0, keine offenen Buchungen (`pending_bookings` 0). MARS hat den Stop also angenommen.
+- HA blieb mit offenem Panel flüssig: Der Fix gegen das Einfrieren wirkt.
+- Nebenbefund: Um 20:54 stand die Einheit kurz auf `admin`, weil das Relais während des HA-Hängers ohne Session einschaltete. Seither nicht wieder aufgetreten.
+
+## 2026-11-10 – Rückmeldungen zum Test, hub.py-Fix, Plan für den Backend-Test
+> Admin Modus > das war ICH manuell
+> Ich hab ein OLED am 9998
+> Mein zuhause Netzwerk ist nur "TarantlHome" ... ich weiss nicht warum das erste mal scheitert
+> die schnittstelle im hub.py bitte machen
+> lass uns mit diesem reader jetzt machineswitch_test.php testen - wie mache ich das?
+
+- Der Admin-Modus um 20:54 war ein manuelles Einschalten, also korrektes Verhalten. Am 9998 hängt ein OLED, die LCD-Meldung ist damit erwartet.
+- WLAN: Der Router zu Hause sendet `TarantlHome` (BSSID `B0:19:21:63:98:7E`) und `MakerIntern_001` (`BE:19:21:63:98:7E`), offensichtlich dasselbe Gerät. Der erste Verbindungsversuch scheitert jeweils mit „Authentication Failed“, der zweite gelingt. Ursache offen (vermutlich das Zusammenspiel von Router und ESP32), harmlos, weil ESPHome sofort erneut versucht.
+- `hub.py`: `async_get_device(identifiers=...)` ersetzt. Gesucht wird jetzt nur unter den Geräten des eigenen Eintrags (`async_entries_for_config_entry`). Version 0.5.4.
+
+## 2026-11-10 – Test machineswitch_test.php (Backend-Patch)
+> URL ist umgestellt, Karte gescannt – schau nach
+> B1-F4-0A-B1
+
+**Teil A, über MakerLink und Reader 9998** (URL auf `machineswitch_test.php`): 21:18:30 Start → aktiv, Relais ein; 21:18:36 Stop → idle, Relais aus, Kosten 0, keine offenen Buchungen. Start (mit maskiertem `rfid`) und Stop funktionieren mit dem Patch.
+
+**Teil B, per curl** (Karte `0xb1 0xf4 0xa 0xb1`, Unit 9998, Typ `machine`, also kostenlos):
+| Aufruf | Antwort |
+|---|---|
+| `start` | `{"ok":true,"key":46407,"name":"Christoph","msg":"Aktiviert"}` |
+| `stop key=46407 end=<jetzt-60>` | `{"ok":true,"msg":"Gestoppt","cost":0,"duration_s":0}`: Ende vor dem Start wird auf den Start geklemmt |
+| derselbe `stop` nochmal | `{"ok":true,"msg":"Bereits gestoppt","already_stopped":true}`: keine Doppelbuchung |
+| `stop key=1 unitid=9998` | `{"ok":false,"msg":"Session nicht gefunden (key=1 unitid=9998)"}` |
+
+Alle Erwartungen aus `backend/README.md` sind erfüllt. Die Testdatei kann `machineswitch.php` ersetzen.
+
+**Nebenbei:**
+- Der MARS-Server war über den Tailscale-Exit-Node `arnolaptop` nicht erreichbar: Er steht im Makerspace hinter derselben öffentlichen IP, und der Weg zur eigenen öffentlichen IP klappt dort nicht. Exit-Node für den Test kurz abgeschaltet (mit Zustimmung des Users) und danach wiederhergestellt.
+- Neue HA-Warnung „has an update listener and should use it for scheduling a reload“ (wird in HA 2026.12 zum Fehler). Behoben: Der Reconfigure-Flow nutzt jetzt `async_update_and_abort`, der Update-Listener `async_schedule_reload`. Kommt mit 0.5.4.

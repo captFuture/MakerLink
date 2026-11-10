@@ -119,7 +119,9 @@ class MakerLinkConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             errors = await _validate(self.hass, user_input)
             if not errors:
-                return self.async_update_reload_and_abort(entry, data_updates=user_input)
+                # No reload here: the entry's update listener reloads it (HA 2026.12+
+                # rejects reloading from both places).
+                return self.async_update_and_abort(entry, data_updates=user_input)
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=_hub_schema(user_input or dict(entry.data)),
