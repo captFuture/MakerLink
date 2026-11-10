@@ -232,6 +232,39 @@ Kontext: Der User flashte die S3-Firmware und bekam einen Bootloop (`spi_flash: 
 
 Version 0.4.0 → **0.4.1**.
 
+## 2026-10-27 – Onboarding zu kompliziert (Planung)
+> the onboarding of a device is too complicated at the moment. What was holding me back:
+> - the yaml files for esphome are always a copy of a known hardware but the filenames are difficult to get right.
+> - Our readers have unique ids (and a description, and a function like door, machine [with sub-function]) - it is difficult to get it right the first time
+> - the process is > flashing, finding the device in esphome integration and add it to makerlink integration, then it shows in the makerlink page, this is complicated and confusing.
+> - The reader device can not be switched from door to machine and vice versa
+>
+> the readers themselves work great
+
+**Analyse:** Name, Funktion und Unit-ID standen an drei Stellen (YAML, ESPHome-Gerät, MakerLink-Einheit) und mussten von Hand zusammengeführt werden (sechs Entitäten-Auswahlfelder). Die Funktion (Tür/Maschine) steckt gar nicht in der Firmware, das Umstellen scheiterte nur daran, dass der Neu-konfigurieren-Dialog die Art nicht änderbar machte. Außerdem passten die Dateinamen in der README nicht zu denen im Repo (`makerlink-reader-*` statt `tocopy-makerlink-*`).
+
+**Entscheidungen des Users** (Rückfrage am 2026-10-27):
+- Einrichten im **MakerLink-Panel** statt im HA-Config-Flow.
+- **Eigene YAML pro Reader**, dafür ein Generator im Panel (statt generischer Firmware mit MAC-Suffix).
+- Der ESPHome-Bestätigungsklick bleibt, das Panel zeigt den Schritt als **Hinweis** an.
+
+**Ergebnis (v0.5.0):** Siehe PLAN.md 3.6. Panel: „Reader hinzufügen“ (YAML-Generator mit freiem Namen), „Neue Reader“ mit Einrichten/Identifizieren, Bearbeiten (Name, Funktion Maschine ↔ Tür, Unit-ID, Abrechnungsart, Schaltziel) und Entfernen. README-Dateinamen korrigiert.
+
+## 2026-10-27 – Logo für die Integration
+> ich möchte ein logo bei der hacs integration anzeigen
+>
+> (SVG `makerlink5.svg` mitgeliefert: Zahnrad, NFC-Karte, Funkwellen)
+
+**Ergebnis (v0.5.1):** Quelle in `docs/logo/makerlink.svg`. Daraus gerenderte PNGs in `custom_components/makerlink/brand/` (`icon`, `logo`, `dark_logo`, jeweils auch `@2x`), das ab Home Assistant 2026.3 lokal geladen wird. Offen: Ob HACS selbst das Logo in seiner Liste zeigt, ist nicht bestätigt (ein Forenbeitrag sagt, nur mit Eintrag im Brands-Repository). Das Wortmarken-Logo ist Icon plus Text „MakerLink“ in der Systemschrift, nicht das Original.
+
+## 2026-10-27 – Sicherheitsschalter nur wenn vorhanden
+> wenn bei der erstkonfiguration kein "Sicherheitsschalter" definiert ist (2 stück möglich), dann soll das nicht angezeigt werden (dann gibt es keinen sicherheitsschalter)
+> Nur bei 1 oder 2 sicherheitsschaltern soll am display der hinweis "tür offen" stehen und ein einschalten verhindern, wenn nicht geschlossen
+
+**Ursache:** Das Onboarding im Panel hängte beide Sicherheitsschalter-Eingänge der Firmware automatisch an jede Maschine. Ein nicht angeschlossener Eingang liest sich als „offen“, also zeigte das Display „Tür offen“ und der Start war gesperrt.
+
+**Ergebnis (v0.5.2):** Im Einrichten/Bearbeiten-Formular gibt es „Sicherheitsschalter“ mit keine / 1 / 2 (Standard keine). Nur dann werden die Eingänge zugeordnet. Controller, Display, Entität und Panel zeigten Interlocks schon vorher nur bei konfigurierten Schaltern.
+
 ## 2026-10-21 – Außer Betrieb: keine Karte lesen
 > wenn der "ausser betrieb" modus aktiv ist, darf keine karte gelesen werden
 

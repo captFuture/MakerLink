@@ -20,6 +20,8 @@ MODULES = [
     "sensor",
     "switch",
     "ws_api",
+    "discovery",
+    "readers",
 ]
 
 

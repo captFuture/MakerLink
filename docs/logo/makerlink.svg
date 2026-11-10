@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Hintergrund-Verlauf (Dunkles Slate-Blau) -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+
+    <!-- Home Assistant Blau für NFC & Karte -->
+    <linearGradient id="haBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+
+    <!-- Maker Orange für das Zahnrad -->
+    <linearGradient id="makerOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FB923C" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+
+    <!-- Schlagschatten für Tiefenwirkung -->
+    <filter id="shadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+
+  <!-- App-Icon Hintergrund -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="111" fill="none" stroke="#334155" stroke-width="4" opacity="0.6" />
+
+  <!-- ZAHNRAD (Steht für die Maschinen & Maker) -->
+  <g filter="url(#shadow)" transform="translate(215, 215)">
+    <!-- Zahnrad-Zähne -->
+    <g fill="url(#makerOrange)">
+      <rect x="-22" y="-130" width="44" height="260" rx="10" />
+      <rect x="-22" y="-130" width="44" height="260" rx="10" transform="rotate(45)" />
+      <rect x="-22" y="-130" width="44" height="260" rx="10" transform="rotate(90)" />
+      <rect x="-22" y="-130" width="44" height="260" rx="10" transform="rotate(135)" />
+    </g>
+    <!-- Zahnrad-Körper -->
+    <circle cx="0" cy="0" r="102" fill="url(#makerOrange)" />
+    <!-- Zahnrad-Inneres (Aussparung) -->
+    <circle cx="0" cy="0" r="58" fill="#151E2E" stroke="#0F172A" stroke-width="6" />
+
+    <!-- Power-Symbol im Zentrum des Zahnrads (Maschine einschalten) -->
+    <path d="M -20 -14 A 26 26 0 1 0 20 -14" fill="none" stroke="#FB923C" stroke-width="8" stroke-linecap="round" opacity="0.5" />
+    <line x1="0" y1="-28" x2="0" y2="-4" stroke="#FB923C" stroke-width="8" stroke-linecap="round" opacity="0.5" />
+  </g>
+
+  <!-- NFC-KARTE & DISPLAY (Vordergrund rechts unten) -->
+  <g filter="url(#shadow)" transform="translate(220, 250)">
+    <!-- Karten-Körper -->
+    <rect x="0" y="0" width="210" height="145" rx="22" fill="url(#haBlue)" stroke="#E0F2FE" stroke-width="3" />
+
+    <!-- Display / Chip-Element (Grünes Freigabe-Signal) -->
+    <rect x="24" y="24" width="60" height="44" rx="8" fill="#0F172A" opacity="0.85" />
+    <!-- Haken für "Berechtigte Karte / Freigabe" -->
+    <path d="M 40 46 L 50 56 L 70 36" fill="none" stroke="#4ADE80" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Stilisierte Textzeilen (Mitgliedsdaten / Display-Text) -->
+    <line x1="26" y1="95" x2="140" y2="95" stroke="#E0F2FE" stroke-width="10" stroke-linecap="round" opacity="0.9" />
+    <line x1="26" y1="118" x2="90" y2="118" stroke="#BAE6FD" stroke-width="8" stroke-linecap="round" opacity="0.6" />
+
+    <!-- Kleines Link-Symbol auf der Karte -->
+    <circle cx="172" cy="106" r="16" fill="#0284C7" />
+    <path d="M 166 106 L 178 106 M 172 100 L 172 112" stroke="#E0F2FE" stroke-width="4" stroke-linecap="round" />
+  </g>
+
+  <!-- NFC FUNKWELLEN (Verbindung zwischen Karte und Maschine) -->
+  <g filter="url(#shadow)" fill="none" stroke="#38BDF8" stroke-linecap="round">
+    <path d="M 335 215 A 45 45 0 0 1 380 260" stroke-width="12" />
+    <path d="M 335 180 A 80 80 0 0 1 415 260" stroke-width="12" opacity="0.75" />
+    <path d="M 335 145 A 115 115 0 0 1 450 260" stroke-width="12" opacity="0.4" />
+  </g>
+</svg>

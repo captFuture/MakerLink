@@ -3,14 +3,17 @@
 # bisherige Firmware, aber ohne Business-Logik.
 
 substitutions:
-  devicename: makerlink-wemos
-  friendly_name: MakerLink Reader Wemos D1 Mini
+  devicename: makerlink-9997
+  friendly_name: 9997 DEMO MakerLink Reader Wemos
   p_relay: GPIO16
   p_sda: GPIO4
   p_scl: GPIO5
   p_rfid_rst: GPIO0
   p_rfid_ss: GPIO15
 
+esphome:
+  name: ${devicename}
+  
 packages:
   base: !include common/makerlink-reader-base.yaml
   display: !include common/display-lcd1602.yaml
