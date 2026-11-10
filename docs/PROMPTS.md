@@ -459,3 +459,20 @@ Bestandsaufnahme: Aus dem ursprünglichen Phase-2-Umfang sind Interlock, Tür (d
 - Integration: `whitelist.py` (HA-frei), Sync beim Start und wöchentlich (stündlicher Retry nach Fehlern), Panel zeigt Whitelist-Stand und „Jetzt synchronisieren“. Neuer Schalter „Offline erlauben“ pro Einheit (Maschine Standard aus, Tür Standard an). Offline-Session im Controller, Nachbuchung über die bestehende Queue, Tür-Protokoll persistent gepuffert.
 - 10 neue Tests, insgesamt 84 grün. PHP nicht lokal geprüft (kein PHP installiert), `php -l` steht im Test-Ablauf in `backend/README.md`.
 - Die spätere Schulungsprüfung ist im Memory und in PLAN.md vermerkt.
+
+## 2026-11-10 – Test der 0.6.0-Backend-Erweiterung (machineswitch_test.php)
+> 1. ist erledigt
+
+| Aufruf | Ergebnis |
+|---|---|
+| ohne `action` | 400 (Regression ok) |
+| `whitelist` mit Key | `ok:true`, 91 Karten, Antwort nur mit `cards`/`count` (keine Namen), Testkarte enthalten |
+| `whitelist` ohne Key | 401 |
+| `offlineSession` (Unit 9998, `machine`, 3 min) | `Gestoppt`, `duration_s` 180 |
+| dieselbe `offlineSession` nochmal | `Bereits gestoppt`, `already_stopped:true` |
+| Ende vor Start | 400 `Parameter start/end ungueltig` |
+| unbekannte Karte | 404 `Karte unbekannt` |
+| `start` → `stop` → `stop` | `Aktiviert` (46410) → `Gestoppt` → `Bereits gestoppt` |
+| `doorLockCheck` | `["True","Super User","Unlimited (0)"]` |
+
+Nicht getestet: `logDoorAccess&time=` (hätte einen echten Eintrag in `access_log` geschrieben). Die Testdatei kann `machineswitch.php` ersetzen.
