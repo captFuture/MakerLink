@@ -503,3 +503,11 @@ MakerLink `b5712b3` (0.6.0) installiert, HA um 22:44 neu gestartet. Die Whitelis
 - Die direkte Gegenprobe in MARS (gleiche `offlineSession` nochmal → erwartet `already_stopped`) wurde vom Sicherheitsfilter blockiert, weil sie gegen die Produktiv-DB geht. Kann der User bei Bedarf selbst prüfen (machine_time, Unit 9998, Starts 1794347406 und 1794347451).
 - Kosmetik: Die Log-Zeilen sagten bei Offline-Sessions „stop of session None“. Jetzt „offline <start>“. Version 0.6.1.
 - Offline-Fallback 1c-A damit Ende zu Ende bestätigt.
+
+## 2026-11-19 – Mock-Server fuer machineswitch
+> can we mock a server on localhost for testing the functions of machineswitch? with a gui that can have all sorts of settings for different scenarios?
+> Which Info do you need?
+> ich habe in meinem heimnetzwerk eine Home assistant instanz, wo ich testen kann. python ist OK als testserver
+> eine kaffeemaschine, eine tür, ein 3d drucker, ein kiln, ein laser und eine maschine ohne spezielle herausforderungen sollen möglich seibn
+
+Umgesetzt in `tools/mock_server/` (Python, nur Standardbibliothek, Bindung an `0.0.0.0`, damit HA im Heimnetz ihn erreicht). Bildet die Logik von `machineswitch.php` 1:1 nach und hat sechs Beispielgeraete (Tuer 1, Kaffee 6, Laser 1720, 3D-Drucker 1721, Brennofen 1722, Maschine 1730). GUI mit virtuellem Reader, Mitgliedern, Fehlerinjektion, Serverzeit, Preisen, Daten- und Request-Log. Tests: `tests/test_mock_server.py`.

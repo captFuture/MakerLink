@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MARS Mock</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1d2330; --card:#fff; --mut:#667085; --line:#d9dde5; --acc:#0b6bcb; --ok:#14833b; --bad:#c62828; --warn:#b26a00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171d; --fg:#e6e9ef; --card:#1d222b; --mut:#98a2b3; --line:#2f3643; --acc:#58a6ff; --ok:#4cc16f; --bad:#ff7b72; --warn:#e3a008; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,Segoe UI,sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; padding:10px 16px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; }
+  header .mut { color:var(--mut); }
+  nav { display:flex; gap:4px; flex-wrap:wrap; padding:8px 16px 0; }
+  nav button { border:1px solid var(--line); border-bottom:none; background:var(--bg); color:var(--fg); padding:6px 14px; border-radius:8px 8px 0 0; cursor:pointer; }
+  nav button.on { background:var(--card); font-weight:600; color:var(--acc); }
+  main { padding:16px; background:var(--card); margin:0 16px 16px; border:1px solid var(--line); border-radius:0 8px 8px 8px; min-height:60vh; }
+  h2 { font-size:15px; margin:18px 0 8px; } h2:first-child { margin-top:0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
+  .box { border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--bg); }
+  .box h3 { margin:0 0 6px; font-size:14px; }
+  label { display:block; font-size:12px; color:var(--mut); margin:6px 0 2px; }
+  input, select, textarea, button { font:inherit; color:var(--fg); }
+  input, select, textarea { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:5px 7px; width:100%; }
+  input[type=checkbox] { width:auto; }
+  textarea { min-height:58px; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  button { background:var(--acc); color:#fff; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; }
+  button.sec { background:transparent; color:var(--acc); border:1px solid var(--acc); }
+  button.del { background:transparent; color:var(--bad); border:1px solid var(--bad); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+  .row > * { flex:0 1 auto; } .row input, .row select { width:auto; min-width:70px; }
+  table { border-collapse:collapse; width:100%; font-size:12px; }
+  th, td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .warn { color:var(--warn); } .mut { color:var(--mut); }
+  code, pre { font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:8px; white-space:pre-wrap; word-break:break-all; margin:6px 0 0; max-height:180px; overflow:auto; }
+  .tag { display:inline-block; padding:0 6px; border-radius:10px; border:1px solid var(--line); font-size:11px; color:var(--mut); }
+  .help { color:var(--mut); font-size:12px; margin:4px 0 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MARS Mock</h1>
+  <span class="mut">API: <code id="apiurl"></code></span>
+  <span class="mut">Serverzeit: <b id="mnow"></b></span>
+  <span class="mut" id="stat"></span>
+</header>
+<nav id="tabs"></nav>
+<main id="main"></main>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S = null, tab = localStorage.getItem('tab') || 'devices';
+const TABS = {devices:'Geraete', members:'Mitglieder', faults:'Fehler', settings:'Einstellungen', data:'Daten', log:'Request-Log'};
+const keys = {};   // unitid -> laufende Session-Keys (virtueller Reader)
+const results = {}; // unitid -> letztes Ergebnis
+
+async function api(path, body) {
+  const r = await fetch('/_gui/' + path, body === undefined ? {} : {method:'POST', body:JSON.stringify(body)});
+  const j = await r.json(); if (j.ok === false) alert(j.msg); return j;
+}
+async function load() { S = await (await fetch('/_gui/state')).json(); head(); }
+function head() {
+  $('#apiurl').textContent = location.origin + '/machineswitch.php';
+  $('#mnow').textContent = S.mock_weekday + ' ' + S.mock_now + (S.config.time_offset_s ? ' (verschoben)' : '');
+  $('#stat').innerHTML = S.faults.some(f => f.enabled) ? '<span class="bad">Fehlerregeln aktiv</span>' : '';
+}
+function tabs() {
+  $('#tabs').innerHTML = Object.entries(TABS).map(([k,v]) => `<button class="${k===tab?'on':''}" data-t="${k}">${v}</button>`).join('');
+  $('#tabs').onclick = e => { const t = e.target.dataset.t; if (t) { tab = t; localStorage.setItem('tab', t); show(); } };
+}
+async function show() { tabs(); await load(); ({devices, members, faults, settings, data, log}[tab])(); }
+
+// ------------------------------------------------------------ Geraete (virtueller Reader)
+function allCards() { return S.members.flatMap(m => m.cards.map(c => ({serial:c.serial, label:`${m.firstName} ${m.lastName} - ${c.serial}`}))); }
+function devices() {
+  const opts = allCards().map(c => `<option value="${esc(c.serial)}">${esc(c.label)}</option>`).join('') + '<option value="0xde 0xad 0xbe 0xef">(unbekannte Karte)</option>';
+  $('#main').innerHTML = `<div class="help">Virtueller Reader: ruft die API genau wie ein ESPHome-Reader auf (inkl. aktiver Fehlerregeln). Ergebnisse stehen auch im Request-Log.</div><div class="grid">` +
+    S.units.map(u => {
+      const door = u.type === 'door', coffee = u.type === 'coffee';
+      return `<div class="box" data-u="${u.unitid}"><h3>${esc(u.name)} <span class="tag">${u.unitid} · ${u.type}</span></h3>
+        <label>Karte</label><select class="card">${opts}</select>
+        <div class="row">${door ? '<button data-do="door">Karte scannen</button>' :
+          coffee ? '<button data-do="coffee">Kaffee</button>' :
+          '<button data-do="start">Start</button><button data-do="stop" class="sec">Stop</button>'}</div>
+        ${door || coffee ? '' : `<div class="row"><span class="mut">Laufzeit:</span><input class="mins" type="number" value="15" min="0" style="width:70px"> min
+          <button class="sec" data-do="ff">Zeit vorspulen</button></div>
+          <div class="row"><label style="margin:0"><input type="checkbox" class="dbl"> Stop doppelt senden</label></div>
+          <div class="row"><span class="mut">min_balance:</span><input class="minbal" type="number" value="5" step="0.5" style="width:70px"></div>`}
+        <div class="mut sess" style="margin-top:6px">${keys[u.unitid] ? 'Session key=' + keys[u.unitid] : ''}</div>
+        <pre class="res">${esc(results[u.unitid] || '')}</pre></div>`;
+    }).join('') + '</div>';
+  $('#main').onclick = async e => {
+    const b = e.target.closest('button[data-do]'); if (!b) return;
+    const box = b.closest('.box'), uid = +box.dataset.u, u = S.units.find(x => x.unitid === uid);
+    const rfid = $('.card', box).value, call = async p => {
+      const q = new URLSearchParams(p);
+      const r = await fetch('/machineswitch.php?' + q, {headers:{'X-MARS-Key': S.config.api_key}}).catch(err => ({status:'ERR', text: async () => String(err)}));
+      const t = await r.text(); return {status: r.status, text: t, json: (() => { try { return JSON.parse(t); } catch { return null; } })()};
+    };
+    const show1 = (label, r) => results[uid] = (results[uid] ? results[uid] + '\n' : '') + `${label}: HTTP ${r.status} ${r.text}`;
+    results[uid] = '';
+    const d = b.dataset.do, type = ['laser','3dprint','kiln','machine'].includes(u.type) ? u.type : 'machine';
+    if (d === 'door') {
+      const r = await call({action:'doorLockCheck', rfid}); show1('doorLockCheck', r);
+      const ok = Array.isArray(r.json) && r.json[0] === 'True';
+      await new Promise(s => setTimeout(s, 2000));
+      show1('logDoorAccess', await call({action:'logDoorAccess', rfid, status: ok ? 'TRUE' : 'FALSE', unitid: uid, check: 2}));
+    } else if (d === 'coffee') {
+      show1('start', await call({action:'start', rfid, unitid: uid, type:'machine', min_balance: 0.5}));
+    } else if (d === 'start') {
+      const r = await call({action:'start', rfid, unitid: uid, type, min_balance: $('.minbal', box).value}); show1('start', r);
+      if (r.json && r.json.key) keys[uid] = r.json.key;
+    } else if (d === 'stop') {
+      if (!keys[uid]) { show1('stop', {status:'-', text:'keine laufende Session (erst Start)'}); }
+      else {
+        const p = {action:'stop', key: keys[uid], unitid: uid, type};
+        const r = await call(p); show1('stop', r);
+        if ($('.dbl', box).checked) show1('stop (2.)', await call(p));
+        if (r.json && r.json.ok) delete keys[uid];
+      }
+    } else if (d === 'ff') {
+      await api('config', {time_offset_s: S.config.time_offset_s + (+$('.mins', box).value) * 60}); await load();
+      show1('Zeit', {status:'ok', text:`+${$('.mins', box).value} min, jetzt ${S.mock_now}`});
+    }
+    await load(); devices();
+  };
+}
+
+// ------------------------------------------------------------ Mitglieder
+function members() {
+  const machines = S.units.filter(u => !['door','coffee'].includes(u.type) || u.type === 'coffee');
+  const card = m => `<div class="box" data-cid="${m.cid}"><h3>#${m.cid}</h3>
+    <div class="row"><input class="fn" value="${esc(m.firstName)}" placeholder="Vorname"><input class="ln" value="${esc(m.lastName)}" placeholder="Nachname"></div>
+    <label>Karten (eine pro Zeile, Prefix ! = abgelaufen)</label>
+    <textarea class="cards">${esc(m.cards.map(c => (c.expired ? '!' : '') + c.serial).join('\n'))}</textarea>
+    <label>Mitgliedschaften (pid:Name pro Zeile; pid 2 Basic, 3 Standard, 12 Unlimited; Zutritts-Tarif z.B. 2:Mon 1822)</label>
+    <textarea class="ms">${esc(m.memberships.map(x => x.pid + ':' + x.name).join('\n'))}</textarea>
+    <label>Schulungen</label>
+    <div>${machines.map(u => `<label style="display:inline-block;margin-right:10px"><input type="checkbox" class="tr" value="${u.unitid}" ${m.trained.includes(u.unitid) ? 'checked' : ''}> ${esc(u.name)}</label>`).join('')}</div>
+    <div class="row"><label style="margin:0">Guthaben <input class="bal" type="number" step="0.1" value="${m.balance ?? 0}" style="width:90px"></label>
+      <label style="margin:0"><input type="checkbox" class="bl" ${m.blocked ? 'checked' : ''}> blockiert</label>
+      <label style="margin:0"><input type="checkbox" class="dl" ${m.deleted ? 'checked' : ''}> geloescht</label></div>
+    <div class="row"><button data-a="save">Speichern</button>${m.cid ? '<button class="del" data-a="del">Loeschen</button>' : ''}</div></div>`;
+  $('#main').innerHTML = `<div class="row" style="margin:0 0 12px"><button id="addm">+ Mitglied</button><span class="help">Karten-UIDs im MARS-Format: <code>0xf4 0x96 0xd2 0x28</code></span></div><div class="grid">${S.members.map(card).join('')}</div>`;
+  const read = box => ({
+    cid: +box.dataset.cid || 0, firstName: $('.fn', box).value, lastName: $('.ln', box).value,
+    cards: $('.cards', box).value.split('\n').map(s => s.trim()).filter(Boolean).map(s => s[0] === '!' ? {serial:s.slice(1).trim(), expired:true} : {serial:s, expired:false}),
+    memberships: $('.ms', box).value.split('\n').map(s => s.trim()).filter(Boolean).map(s => { const i = s.indexOf(':'); return {pid: s.slice(0, i), name: s.slice(i + 1)}; }),
+    trained: [...box.querySelectorAll('.tr:checked')].map(x => +x.value),
+    blocked: $('.bl', box).checked, deleted: $('.dl', box).checked, balance: $('.bal', box).value,
+  });
+  $('#main').onclick = async e => {
+    if (e.target.id === 'addm') { await api('member', {firstName:'Neu', lastName:'Mitglied', cards:[], memberships:[{pid:2,name:'Basic'}], trained:[], balance:10}); return show(); }
+    const a = e.target.dataset.a, box = e.target.closest('.box'); if (!a) return;
+    if (a === 'save') { await api('member', read(box)); e.target.textContent = 'Gespeichert'; setTimeout(show, 600); }
+    if (a === 'del' && confirm('Mitglied loeschen?')) { await api('member_delete', {cid: +box.dataset.cid}); show(); }
+  };
+}
+
+// ------------------------------------------------------------ Fehler
+const MODES = {status:'HTTP-Status (Body {ok:false})', timeout:'Timeout (Verbindung haengt, dann Abbruch)', drop:'Verbindung sofort trennen', badjson:'200 mit HTML statt JSON', empty:'200 mit leerem Body', lost_response:'Aktion ausfuehren, Antwort geht verloren'};
+function faults() {
+  const acts = ['*','start','stop','doorLockCheck','logDoorAccess','whitelist','offlineSession'];
+  $('#main').innerHTML = `<div class="help">Regeln werden der Reihe nach geprueft, die erste passende greift. Server-Ausfall komplett: Aktion <code>*</code> mit Status 503.</div>
+  <div class="row" style="margin:0 0 12px"><b>Schnell:</b>
+    <button class="sec" data-p="down">Ausfall (503 alles)</button><button class="sec" data-p="timeout">Timeout alles</button>
+    <button class="sec" data-p="auth">401 alles</button><button class="sec" data-p="lost">Stop: Antwort verloren</button>
+    <button class="sec" data-p="flaky">jede 2. Anfrage 500</button><button class="del" data-p="clear">Alle loeschen</button></div>
+  <div class="box"><h3>Neue Regel</h3><div class="row">
+    <select id="fa">${acts.map(a => `<option>${a}</option>`).join('')}</select>
+    <select id="fu"><option value="0">alle Geraete</option>${S.units.map(u => `<option value="${u.unitid}">${esc(u.name)} (${u.unitid})</option>`).join('')}</select>
+    <select id="fm">${Object.entries(MODES).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+    <div class="row"><label style="margin:0">Status <input id="fs" type="number" value="503" style="width:80px"></label>
+      <label style="margin:0">Timeout ms <input id="fd" type="number" value="30000" style="width:90px"></label>
+      <label style="margin:0">jede n-te <input id="fe" type="number" value="1" min="1" style="width:60px"></label>
+      <label style="margin:0">max. Treffer (0=unbegrenzt) <input id="fc" type="number" value="0" min="0" style="width:60px"></label>
+      <button id="fadd">Hinzufuegen</button></div></div>
+  <h2>Aktive Regeln</h2>
+  <table><tr><th></th><th>#</th><th>Aktion</th><th>Geraet</th><th>Modus</th><th>Status</th><th>n</th><th>max</th><th>Treffer</th><th></th></tr>
+  ${S.faults.map(f => `<tr data-id="${f.id}"><td><input type="checkbox" class="en" ${f.enabled ? 'checked' : ''}></td><td>${f.id}</td><td>${esc(f.action)}</td><td>${f.unitid || 'alle'}</td><td>${f.mode}</td><td>${f.mode === 'status' ? f.status : f.mode === 'timeout' ? f.delay_ms + ' ms' : ''}</td><td>${f.every_n}</td><td>${f.max_count || '-'}</td><td>${f.fired}</td><td><button class="del" data-del="${f.id}">x</button></td></tr>`).join('') || '<tr><td colspan="10" class="mut">keine</td></tr>'}</table>`;
+  const add = f => api('fault', f).then(show);
+  const P = {down:{action:'*',mode:'status',status:503}, timeout:{action:'*',mode:'timeout',delay_ms:30000}, auth:{action:'*',mode:'status',status:401}, lost:{action:'stop',mode:'lost_response'}, flaky:{action:'*',mode:'status',status:500,every_n:2}};
+  $('#main').onclick = async e => {
+    const t = e.target;
+    if (t.dataset.p === 'clear') { await api('fault_clear', {}); return show(); }
+    if (t.dataset.p) return add(P[t.dataset.p]);
+    if (t.dataset.del) { await api('fault_delete', {id: +t.dataset.del}); return show(); }
+    if (t.id === 'fadd') add({action:$('#fa').value, unitid:$('#fu').value, mode:$('#fm').value, status:$('#fs').value, delay_ms:$('#fd').value, every_n:$('#fe').value, max_count:$('#fc').value});
+    if (t.classList.contains('en')) { const f = S.faults.find(x => x.id === +t.closest('tr').dataset.id); await api('fault', {...f, enabled: t.checked}); await load(); }
+  };
+}
+
+// ------------------------------------------------------------ Einstellungen
+function settings() {
+  const P = S.prices;
+  $('#main').innerHTML = `<h2>Server</h2><div class="row"><label style="margin:0">API-Key (leer oder CHANGEME = Server nicht konfiguriert, 500)<input id="key" value="${esc(S.config.api_key)}" style="width:300px"></label>
+    <label style="margin:0">Latenz ms<input id="lat" type="number" min="0" value="${S.config.latency_ms}" style="width:90px"></label><button id="cfg">Speichern</button></div>
+  <h2>Serverzeit</h2><div class="help">Beeinflusst Zutrittstarife (Wochentag und Stunde), Session-Zeiten und die Plausibilitaetspruefung bei offlineSession. Jetzt: <b>${S.mock_weekday} ${S.mock_now}</b>, Versatz ${S.config.time_offset_s} s</div>
+  <div class="row"><button class="sec" data-off="900">+15 min</button><button class="sec" data-off="3600">+1 h</button><button class="sec" data-off="86400">+1 Tag</button><button class="sec" data-off="-3600">-1 h</button><button class="del" data-off="reset">Versatz zuruecksetzen</button>
+    <input id="dt" type="datetime-local"><button id="dtset">Setzen</button></div>
+  <h2>Preise (Tabelle price, je Plan: 1 Basic, 2 Standard, 4 Unlimited)</h2>
+  <table><tr><th>Plan</th><th>laser_full (je Viertelstunde)</th><th>3dprint_min</th><th>dtf_drucker_min</th></tr>
+  ${['1','2','4'].map(k => `<tr data-k="${k}"><td>${k}</td>${['laser_full','3dprint_min','dtf_drucker_min'].map(c => `<td><input class="pr" data-c="${c}" type="number" step="0.01" value="${P[k]?.[c] ?? 0}"></td>`).join('')}</tr>`).join('')}</table>
+  <div class="row"><button id="prs">Preise speichern</button><span class="mut">kiln: fix 40 EUR (wie im PHP)</span></div>
+  <h2>Geraete</h2><div class="help">Eine Zeile pro Geraet: <code>unitid;Name;typ</code>, Typ: door, coffee, machine, laser, 3dprint, dtf, kiln. Coffee ist unitid 6 (Sonderfall im PHP), Tuer unitid 1.</div>
+  <textarea id="units" style="min-height:120px">${esc(S.units.map(u => `${u.unitid};${u.name};${u.type}`).join('\n'))}</textarea><div class="row"><button id="us">Geraete speichern</button></div>
+  <h2>Szenario</h2><div class="row"><a href="/_gui/export" download="mock-scenario.json"><button class="sec">Export (JSON)</button></a>
+    <input id="imp" type="file" accept=".json" style="width:220px"><button class="sec" id="impb">Import</button><button class="del" id="rst">Zuruecksetzen auf Standard</button></div>
+  <div class="help">Gespeicherte Szenarien starten mit <code>python tools/mock_server/server.py --state datei.json</code>.</div>`;
+  $('#main').onclick = async e => {
+    const t = e.target;
+    if (t.id === 'cfg') { await api('config', {api_key: $('#key').value, latency_ms: $('#lat').value}); show(); }
+    if (t.dataset.off === 'reset') { await api('config', {time_offset_s: 0}); show(); }
+    else if (t.dataset.off) { await api('config', {time_offset_s: S.config.time_offset_s + +t.dataset.off}); show(); }
+    if (t.id === 'dtset' && $('#dt').value) { await api('time_to', {ts: new Date($('#dt').value).getTime() / 1000}); show(); }
+    if (t.id === 'prs') { const o = {}; document.querySelectorAll('tr[data-k]').forEach(tr => { o[tr.dataset.k] = {}; tr.querySelectorAll('.pr').forEach(i => o[tr.dataset.k][i.dataset.c] = i.value); }); await api('prices', {prices:o}); t.textContent = 'Gespeichert'; }
+    if (t.id === 'us') { const units = $('#units').value.split('\n').map(s => s.trim()).filter(Boolean).map(s => { const [unitid, name, type] = s.split(';'); return {unitid, name, type: (type || 'machine').trim()}; }); await api('units', {units}); show(); }
+    if (t.id === 'rst' && confirm('Alles auf Standard zuruecksetzen?')) { await api('reset', {}); show(); }
+    if (t.id === 'impb') { const f = $('#imp').files[0]; if (!f) return; await api('import', {state: JSON.parse(await f.text())}); show(); }
+  };
+}
+
+// ------------------------------------------------------------ Daten / Log (werden zyklisch aktualisiert)
+function tbl(rows, cols) { return `<table><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>${rows.map(r => `<tr>${cols.map(c => `<td>${esc(r[c])}</td>`).join('')}</tr>`).join('') || `<tr><td class="mut" colspan="${cols.length}">leer</td></tr>`}</table>`; }
+function data() {
+  const mt = S.machine_time.map(r => ({...r, start: new Date(r.machine_start*1000).toLocaleString(), ende: r.machine_end ? new Date(r.machine_end*1000).toLocaleString() : 'OFFEN', paid: r.paid ?? ''}));
+  $('#main').innerHTML = `<h2>machine_time <button class="del" data-c="machine_time">leeren</button></h2>${tbl(mt, ['id','cid','unitid','fname','lname','start','ende','paid'])}
+    <h2>Guthaben-Buchungen (member_payload)</h2>${tbl(S.ledger, ['ts','cid','fname','lname','payload','unitid','amount'])}
+    <h2>access_log <button class="del" data-c="access_log">leeren</button></h2>${tbl(S.access_log, ['ts','cid','rfid','status','unitid','check'])}`;
+  $('#main').onclick = async e => { if (e.target.dataset.c) { await api('clear', {what: e.target.dataset.c}); show(); } };
+}
+async function log() {
+  const L = await (await fetch('/_gui/log')).json();
+  $('#main').innerHTML = `<div class="row" style="margin:0 0 8px"><button class="del" id="clr">Log leeren</button><span class="mut">${L.length} Eintraege, neueste oben</span></div>
+  <table><tr><th>Zeit</th><th>IP</th><th>Aktion</th><th>Parameter</th><th>Status</th><th>ms</th><th>Fehler</th><th>Antwort</th></tr>
+  ${L.map(r => `<tr><td>${esc(r.t)}</td><td>${esc(r.ip)}</td><td><b>${esc(r.action)}</b></td><td><code>${esc(JSON.stringify(r.params))}</code></td><td class="${r.status === 200 ? 'ok' : 'bad'}">${esc(r.status)}</td><td>${r.ms}</td><td class="warn">${esc(r.fault)}</td><td><code>${esc(r.resp)}</code></td></tr>`).join('')}</table>`;
+  $('#clr').onclick = async () => { await api('clear', {what:'log'}); log(); };
+}
+
+setInterval(async () => {
+  if (document.hidden || document.activeElement?.closest('main') && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if (tab === 'log') log();
+  else if (tab === 'data') { await load(); data(); }
+  else await load();
+}, 2000);
+show();
+</script>
+</body>
+</html>

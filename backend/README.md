@@ -29,3 +29,6 @@ Die Datei wurde nie gegen einen PHP-Interpreter geprüft. Ein Syntaxfehler würd
 5. Ohne `action` aufrufen, mit Header `X-MARS-Key`. Erwartet: HTTP **400** („Parameter action fehlt“), also Key und Datenbank in Ordnung. Ohne Header muss **401** kommen.
 6. Einen Start/Stop-Zyklus mit Testkarte gegen die Testdatei (zB MakerLink kurz auf deren URL stellen), dann denselben Stop noch einmal: Der zweite muss `already_stopped` liefern.
 7. Erst dann die Testdatei über `machineswitch.php` kopieren und die Testdatei löschen.
+
+## Mock-Server zum Testen (ohne PHP und Datenbank)
+`tools/mock_server/server.py` bildet `machineswitch.php` in Python nach (gleiche Actions, Statuscodes, Abrechnung, Idempotenz) und hat eine Web-GUI. Details in [tools/mock_server/README.md](../tools/mock_server/README.md).

@@ -187,3 +187,6 @@ Zwei Ausfälle, zwei Stufen (Entscheidung 2026-11-10):
   3. Karte scannen: Schaltziel geht an und es entsteht eine `machine_time`-Zeile.
   4. Erneut scannen: Nachlauf läuft, danach Abrechnung in `member_payload`.
   5. Tür öffnen: Die Maschine geht sofort aus.
+
+## 7. Mock-Server (Testwerkzeug)
+`tools/mock_server/` simuliert das MARS-Backend fuer Tests von MakerLink und den Readern, ohne die Produktiv-DB anzufassen. Nicht Teil der HACS-Integration. Er muss bei Aenderungen an `backend/machineswitch.php` und `docs/API.md` nachgezogen werden (die Tests in `tests/test_mock_server.py` pruefen den Nachbau gegen die dokumentierten Antworten).
